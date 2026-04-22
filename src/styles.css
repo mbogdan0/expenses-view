@@ -191,7 +191,8 @@ h1 {
 .filters-panel h2,
 .table-panel h2,
 .chart-panel h2,
-.data-ops-panel h2 {
+.data-ops-panel h2,
+.tags-panel h2 {
   margin: 0 0 12px;
   font-size: 1.05rem;
 }
@@ -203,7 +204,7 @@ h1 {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(140px, 1fr));
+  grid-template-columns: repeat(7, minmax(140px, 1fr));
   gap: 10px;
   align-items: end;
 }
@@ -213,6 +214,24 @@ h1 {
   gap: 6px;
   font-size: 0.85rem;
   color: var(--text-secondary);
+}
+
+.filter-checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding-bottom: 2px;
+}
+
+.filter-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: auto;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  appearance: auto;
 }
 
 .chart-filters-grid {
@@ -262,6 +281,18 @@ textarea {
   justify-content: flex-end;
 }
 
+.bulk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.bulk-toolbar select {
+  min-width: 260px;
+}
+
 .meta {
   margin: 0;
   color: var(--text-secondary);
@@ -283,7 +314,7 @@ textarea {
 .records-table {
   border-collapse: collapse;
   width: max-content;
-  min-width: 1440px;
+  min-width: 1490px;
 }
 
 .records-table th,
@@ -327,6 +358,17 @@ textarea {
   min-height: 56px;
 }
 
+.records-table .select-column input[type="checkbox"] {
+  width: 16px;
+  min-height: auto;
+  height: 16px;
+  margin: 0 auto;
+  display: block;
+  border: 0;
+  padding: 0;
+  appearance: auto;
+}
+
 .notes-input {
   min-height: 40px !important;
 }
@@ -362,6 +404,30 @@ textarea {
 
 .tags-column {
   min-width: 240px;
+}
+
+.tags-column.tags-count-0 input {
+  border-color: rgba(181, 42, 42, 0.8);
+}
+
+.tags-column.tags-count-1 input {
+  border-color: rgba(181, 138, 42, 0.8);
+}
+
+.tags-column.tags-count-2plus input {
+  border-color: rgba(29, 40, 44, 0.2);
+}
+
+.cell-error {
+  margin-top: 5px;
+  font-size: 0.76rem;
+  color: #7f2323;
+}
+
+.select-column {
+  width: 48px;
+  min-width: 48px;
+  text-align: center;
 }
 
 .readonly-cell {
@@ -411,48 +477,6 @@ textarea {
   color: var(--text-secondary);
 }
 
-.priority-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.priority-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  border: 1px solid transparent;
-}
-
-.priority-chip.p0 {
-  background: rgba(223, 65, 65, 0.12);
-  color: #7f2323;
-  border-color: rgba(181, 42, 42, 0.25);
-}
-
-.priority-chip.p1 {
-  background: rgba(219, 127, 27, 0.14);
-  color: #7d4a10;
-  border-color: rgba(181, 103, 18, 0.26);
-}
-
-.priority-chip.p2 {
-  background: rgba(117, 155, 38, 0.15);
-  color: #3f5d18;
-  border-color: rgba(85, 121, 20, 0.25);
-}
-
-.priority-chip.p3 {
-  background: rgba(89, 114, 136, 0.14);
-  color: #2f4351;
-  border-color: rgba(62, 86, 104, 0.26);
-}
-
 .chart-panel {
   padding-bottom: 8px;
 }
@@ -477,6 +501,10 @@ textarea {
   gap: 10px;
 }
 
+.chart-group-select {
+  min-width: 240px;
+}
+
 .chart-net {
   margin: 0;
   white-space: nowrap;
@@ -487,12 +515,6 @@ textarea {
 .chart-legend-toggle {
   min-height: 34px;
   padding: 0 14px;
-}
-
-.chart-note {
-  margin: 0 0 10px;
-  color: var(--text-secondary);
-  font-size: 0.88rem;
 }
 
 .chart-canvas-wrap {
@@ -520,6 +542,25 @@ textarea {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.tags-editor-label {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--text-secondary);
+}
+
+#tagGroupsTextarea {
+  min-height: 180px;
+}
+
+.tag-issues-list {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: #7f2323;
+  display: grid;
+  gap: 6px;
 }
 
 @media (max-width: 1080px) {
@@ -596,5 +637,16 @@ textarea {
   .table-header-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .bulk-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .bulk-toolbar select,
+  .chart-group-select {
+    min-width: 0;
+    width: 100%;
   }
 }

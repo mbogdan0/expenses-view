@@ -1,22 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  TAG_GROUP_INVALID_LABEL,
+  TAG_GROUP_NO_TAG_LABEL,
+  applyBulkTagMutation,
   buildCategoryPieDatasetUAHAbsoluteNet,
   buildDedupId,
+  buildPiePalette,
+  buildTagGroupPieDatasetUAHAbsoluteNet,
   buildSourceFullCategory,
   buildTagPieDatasetUAHAbsoluteNet,
   countSelectedCalendarDays,
   computeEffectiveRow,
   createEmptyState,
   matchesFilter,
+  normalizeTagGroupIndex,
   normalizeImportedRow,
   normalizeTags,
   parseExpenseCsv,
+  parseTagGroupsText,
   parseStateSnapshotJson,
   recomputeDerivedRows,
   resolveRate,
   sanitizeLoadedState,
-  STORAGE_VERSION
+  STORAGE_VERSION,
+  validateRowTagsAgainstGroups
 } from '../src/core.js';
 
 test('buildSourceFullCategory combines filename and category', () => {
@@ -46,7 +54,27 @@ test('parseExpenseCsv returns expected fields', () => {
 
 test('normalizeTags parses comma-separated values and removes duplicates', () => {
   const tags = normalizeTags(' groceries, travel,Groceries,  travel  , family ');
-  assert.deepEqual(tags, ['groceries', 'travel', 'family']);
+  assert.deepEqual(tags, ['family', 'groceries', 'travel']);
+});
+
+test('buildPiePalette avoids hue collisions within one render set', () => {
+  const labels = [
+    'Housing',
+    'Food',
+    'Transport',
+    'Medical',
+    'Personal',
+    'Entertainment',
+    'Utilities',
+    'Savings',
+    'Debt',
+    'Travel'
+  ];
+
+  const palette = buildPiePalette(labels, true);
+  assert.equal(palette.background.length, labels.length);
+  assert.equal(palette.border.length, labels.length);
+  assert.equal(new Set(palette.hues).size, labels.length);
 });
 
 test('countSelectedCalendarDays returns inclusive range in calendar days', () => {
@@ -225,6 +253,161 @@ test('buildTagPieDatasetUAHAbsoluteNet assigns full amount to each tag', () => {
   ]);
 });
 
+test('parseTagGroupsText requires named groups and rejects duplicates across groups', () => {
+  const parsed = parseTagGroupsText('Priorities: P0, P1, p1\nPersonal: Bogdan, Yulia\nBudget: P0, Shared');
+
+  assert.equal(parsed.groups.length, 3);
+  assert.equal(parsed.groups[0].name, 'Priorities');
+  assert.deepEqual(parsed.groups[0].tags, ['P0', 'P1']);
+  assert.equal(parsed.isValid, false);
+  assert.equal(parsed.issues.length, 1);
+  assert.equal(parsed.issues[0].type, 'duplicate_tag_across_groups');
+});
+
+test('parseTagGroupsText reports invalid lines without separator or without name', () => {
+  const parsed = parseTagGroupsText('No separator line\n: orphan tags\nValid: Alpha');
+
+  assert.equal(parsed.isValid, false);
+  assert.equal(parsed.groups.length, 1);
+  assert.equal(parsed.groups[0].name, 'Valid');
+  assert.equal(parsed.issues.length, 2);
+  assert.equal(parsed.issues[0].type, 'invalid_group_format');
+  assert.equal(parsed.issues[1].type, 'missing_group_name');
+});
+
+test('validateRowTagsAgainstGroups catches unknown tags and same-group conflicts', () => {
+  const taxonomy = parseTagGroupsText('Priorities: P0, P1\nPersonal: Bogdan, Yulia');
+  const validation = validateRowTagsAgainstGroups(['P0', 'P1', 'Ghost'], taxonomy);
+
+  assert.equal(validation.isValid, false);
+  assert.deepEqual(validation.unknownTags, ['Ghost']);
+  assert.deepEqual(validation.duplicateGroups, [{ groupIndex: 0, tags: ['P0', 'P1'] }]);
+});
+
+test('normalizeTagGroupIndex keeps value in range', () => {
+  assert.equal(normalizeTagGroupIndex('1', 3), 1);
+  assert.equal(normalizeTagGroupIndex('9', 3), 0);
+  assert.equal(normalizeTagGroupIndex('-1', 3), 0);
+});
+
+test('applyBulkTagMutation updates selected rows and reports skips', () => {
+  const rowsById = {
+    r1: {
+      id: 'r1',
+      source: { id: 'r1', tags: [] },
+      overrides: { tags: ['P0'] }
+    },
+    r2: {
+      id: 'r2',
+      source: { id: 'r2', tags: [] },
+      overrides: { tags: ['Yulia'] }
+    },
+    r3: {
+      id: 'r3',
+      source: { id: 'r3', tags: [] },
+      overrides: { tags: ['Ghost'] }
+    }
+  };
+
+  const addResult = applyBulkTagMutation(
+    rowsById,
+    ['r1', 'r2', 'r3'],
+    'add',
+    'Bogdan',
+    'Priorities: P0, P1\nPersonal: Bogdan, Yulia'
+  );
+
+  assert.equal(addResult.stats.updated, 1);
+  assert.equal(addResult.stats.skippedConflict, 1);
+  assert.equal(addResult.stats.skippedInvalid, 1);
+  assert.deepEqual(addResult.rowsById.r1.overrides.tags, ['Bogdan', 'P0']);
+
+  const removeResult = applyBulkTagMutation(
+    addResult.rowsById,
+    ['r1'],
+    'remove',
+    'P0',
+    'Priorities: P0, P1\nPersonal: Bogdan, Yulia'
+  );
+  assert.equal(removeResult.stats.updated, 1);
+  assert.deepEqual(removeResult.rowsById.r1.overrides.tags, ['Bogdan']);
+});
+
+test('buildTagGroupPieDatasetUAHAbsoluteNet uses one bucket per row in selected group', () => {
+  const rows = [
+    {
+      source: {
+        id: 'a',
+        category: 'Original',
+        sourceFullCategory: 'File / Original',
+        tags: []
+      },
+      overrides: {
+        tags: ['P0', 'Bogdan']
+      },
+      derived: {
+        unresolved: false,
+        uahAmount: -100
+      }
+    },
+    {
+      source: {
+        id: 'b',
+        category: 'Original',
+        sourceFullCategory: 'File / Original',
+        tags: []
+      },
+      overrides: {
+        tags: ['P1']
+      },
+      derived: {
+        unresolved: false,
+        uahAmount: -50
+      }
+    },
+    {
+      source: {
+        id: 'c',
+        category: 'Original',
+        sourceFullCategory: 'File / Original',
+        tags: []
+      },
+      overrides: {},
+      derived: {
+        unresolved: false,
+        uahAmount: -20
+      }
+    },
+    {
+      source: {
+        id: 'd',
+        category: 'Original',
+        sourceFullCategory: 'File / Original',
+        tags: []
+      },
+      overrides: {
+        tags: ['P0', 'P1']
+      },
+      derived: {
+        unresolved: false,
+        uahAmount: -30
+      }
+    }
+  ];
+
+  const result = buildTagGroupPieDatasetUAHAbsoluteNet(
+    rows,
+    'Priorities: P0, P1\nPersonal: Bogdan, Yulia',
+    0
+  );
+  assert.deepEqual(result, [
+    { label: 'P0', signedNet: -100, absoluteNet: 100 },
+    { label: 'P1', signedNet: -50, absoluteNet: 50 },
+    { label: TAG_GROUP_INVALID_LABEL, signedNet: -30, absoluteNet: 30 },
+    { label: TAG_GROUP_NO_TAG_LABEL, signedNet: -20, absoluteNet: 20 }
+  ]);
+});
+
 test('matchesFilter finds rows by any tag in a multi-tag row', () => {
   const record = {
     source: {
@@ -253,6 +436,7 @@ test('matchesFilter finds rows by any tag in a multi-tag row', () => {
     matchesFilter(record, {
       search: '',
       tag: 'fam',
+      tagsLt2Only: false,
       dateFrom: '',
       dateTo: '',
       status: 'all'
@@ -264,6 +448,7 @@ test('matchesFilter finds rows by any tag in a multi-tag row', () => {
     matchesFilter(record, {
       search: '',
       tag: 'rent',
+      tagsLt2Only: false,
       dateFrom: '',
       dateTo: '',
       status: 'all'
@@ -272,9 +457,105 @@ test('matchesFilter finds rows by any tag in a multi-tag row', () => {
   );
 });
 
-test('sanitizeLoadedState resets legacy tags and migrates chart dates into shared filters', () => {
+test('matchesFilter supports <2 tags toggle for table filtering', () => {
+  const record = {
+    source: {
+      id: 'a',
+      date: '2026-04-01 11:00',
+      category: 'Original',
+      sourceFullCategory: 'File / Original',
+      price: '-100',
+      currency: 'UAH',
+      rate: '',
+      rateType: '',
+      notes: 'Weekly shopping',
+      image: '',
+      tags: []
+    },
+    overrides: {
+      tags: ['family', 'groceries']
+    },
+    derived: {
+      unresolved: false,
+      effectiveDateEpoch: 1711962000000
+    }
+  };
+
+  assert.equal(
+    matchesFilter(record, {
+      search: '',
+      tag: '',
+      tagsLt2Only: true,
+      dateFrom: '',
+      dateTo: '',
+      status: 'all'
+    }),
+    false
+  );
+
+  assert.equal(
+    matchesFilter(record, {
+      search: '',
+      tag: '',
+      tagsLt2Only: false,
+      dateFrom: '',
+      dateTo: '',
+      status: 'all'
+    }),
+    true
+  );
+});
+
+test('matchesFilter keeps end date inclusive for full day', () => {
+  const record = {
+    source: {
+      id: 'a',
+      date: '2026-04-01 23:59',
+      category: 'Original',
+      sourceFullCategory: 'File / Original',
+      price: '-100',
+      currency: 'UAH',
+      rate: '',
+      rateType: '',
+      notes: '',
+      image: '',
+      tags: []
+    },
+    overrides: {},
+    derived: {
+      unresolved: false,
+      effectiveDateEpoch: 1712015940000
+    }
+  };
+
+  assert.equal(
+    matchesFilter(record, {
+      search: '',
+      tag: '',
+      tagsLt2Only: false,
+      dateFrom: '2026-04-01',
+      dateTo: '2026-04-01',
+      status: 'all'
+    }),
+    true
+  );
+
+  assert.equal(
+    matchesFilter(record, {
+      search: '',
+      tag: '',
+      tagsLt2Only: false,
+      dateFrom: '2026-04-02',
+      dateTo: '2026-04-02',
+      status: 'all'
+    }),
+    false
+  );
+});
+
+test('sanitizeLoadedState resets unsupported versions to empty state', () => {
   const legacyState = {
-    version: 1,
+    version: STORAGE_VERSION - 1,
     rowsById: {
       row1: {
         id: 'row1',
@@ -300,29 +581,49 @@ test('sanitizeLoadedState resets legacy tags and migrates chart dates into share
     },
     uiPrefs: {
       filters: {
-        search: '',
-        tag: '',
-        dateFrom: '',
-        dateTo: '',
-        status: 'all'
-      },
-      chartsFilters: {
+        search: 'legacy',
+        tag: 'legacy',
         dateFrom: '2026-04-01T00:00',
-        dateTo: '2026-04-30T23:59'
+        dateTo: '2026-04-30T23:59',
+        status: 'resolved'
       }
     }
   };
 
   const migrated = sanitizeLoadedState(legacyState);
-  const migratedRow = migrated.rowsById.row1;
+  const emptyState = createEmptyState();
 
   assert.equal(migrated.version, STORAGE_VERSION);
-  assert.deepEqual(migratedRow.source.tags, []);
-  assert.equal(Object.hasOwn(migratedRow.source, 'tag'), false);
-  assert.equal(Object.hasOwn(migratedRow.overrides, 'tag'), false);
-  assert.equal(migratedRow.overrides.notes, 'keep me');
-  assert.equal(migrated.uiPrefs.filters.dateFrom, '2026-04-01T00:00');
-  assert.equal(migrated.uiPrefs.filters.dateTo, '2026-04-30T23:59');
+  assert.deepEqual(migrated.rowsById, emptyState.rowsById);
+  assert.deepEqual(migrated.importHistory, emptyState.importHistory);
+  assert.equal(migrated.tagGroupsText, '');
+  assert.equal(migrated.uiPrefs.activeScreen, emptyState.uiPrefs.activeScreen);
+  assert.equal(migrated.uiPrefs.filters.status, emptyState.uiPrefs.filters.status);
+  assert.equal(migrated.uiPrefs.filters.search, emptyState.uiPrefs.filters.search);
+});
+
+test('sanitizeLoadedState normalizes filter dates to YYYY-MM-DD and defaults tagsLt2Only', () => {
+  const state = createEmptyState();
+  state.uiPrefs.filters.dateFrom = '2026-04-01T10:22';
+  state.uiPrefs.filters.dateTo = '2026-04-30 23:59';
+  state.uiPrefs.filters.tagsLt2Only = true;
+
+  const sanitized = sanitizeLoadedState(state);
+  assert.equal(sanitized.uiPrefs.filters.dateFrom, '2026-04-01');
+  assert.equal(sanitized.uiPrefs.filters.dateTo, '2026-04-30');
+  assert.equal(sanitized.uiPrefs.filters.tagsLt2Only, true);
+
+  const withoutBoolean = sanitizeLoadedState({
+    ...state,
+    uiPrefs: {
+      ...state.uiPrefs,
+      filters: {
+        ...state.uiPrefs.filters,
+        tagsLt2Only: 'yes'
+      }
+    }
+  });
+  assert.equal(withoutBoolean.uiPrefs.filters.tagsLt2Only, false);
 });
 
 test('parseStateSnapshotJson accepts valid current snapshot', () => {

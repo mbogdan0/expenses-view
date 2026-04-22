@@ -25,6 +25,7 @@
       <nav class="screen-nav" aria-label="Main navigation">
         <button class="screen-tab active" type="button" data-screen="data">Data</button>
         <button class="screen-tab" type="button" data-screen="charts">Charts</button>
+        <button class="screen-tab" type="button" data-screen="tags">Tags</button>
         <button class="screen-tab" type="button" data-screen="data-ops">Data Ops</button>
       </nav>
 
@@ -40,13 +41,17 @@
               Tag
               <input id="filterTag" type="text" placeholder="any tag" />
             </label>
+            <label class="filter-checkbox-label">
+              <input id="filterTagsLt2Only" type="checkbox" />
+              <span>&lt;2 tags</span>
+            </label>
             <label>
               Date from
-              <input id="filterDateFrom" type="datetime-local" />
+              <input id="filterDateFrom" type="date" />
             </label>
             <label>
               Date to
-              <input id="filterDateTo" type="datetime-local" />
+              <input id="filterDateTo" type="date" />
             </label>
             <label>
               Conversion status
@@ -68,10 +73,19 @@
               <button id="toggleExtraColumns" type="button" class="btn btn-light">Show extra columns</button>
             </div>
           </div>
+          <div class="bulk-toolbar">
+            <p id="bulkSelectedCount" class="meta">0 selected</p>
+            <select id="bulkTagSelect" aria-label="Bulk tag picker">
+              <option value="">Select tag</option>
+            </select>
+            <button id="bulkAddTagButton" type="button" class="btn btn-light">Add tag</button>
+            <button id="bulkRemoveTagButton" type="button" class="btn btn-light">Remove tag</button>
+          </div>
           <div class="table-wrap">
             <table id="recordsTable" class="records-table hide-extra-columns">
               <thead>
                 <tr>
+                  <th class="select-column"><input id="selectVisibleRows" type="checkbox" aria-label="Select visible rows" /></th>
                   <th class="date-column">Date</th>
                   <th class="uah-column">UAH</th>
                   <th class="final-category-column">Final Category</th>
@@ -90,13 +104,6 @@
             </table>
           </div>
         </div>
-
-        <div class="priority-legend" aria-label="Priority legend">
-          <span class="priority-chip p0">P0 - Unavoidable</span>
-          <span class="priority-chip p1">P1 - Important</span>
-          <span class="priority-chip p2">P2 - Moderately important</span>
-          <span class="priority-chip p3">P3 - Could be reduced</span>
-        </div>
       </section>
 
       <section id="chartsScreen" class="screen" aria-label="Charts screen">
@@ -105,11 +112,11 @@
           <div class="chart-filters-grid">
             <label>
               Date from
-              <input id="chartFilterDateFrom" type="datetime-local" />
+              <input id="chartFilterDateFrom" type="date" />
             </label>
             <label>
               Date to
-              <input id="chartFilterDateTo" type="datetime-local" />
+              <input id="chartFilterDateTo" type="date" />
             </label>
             <button id="clearChartFilters" type="button" class="btn btn-light">Clear shared dates</button>
           </div>
@@ -148,21 +155,35 @@
           <div class="chart-title-row">
             <h2>Share by tag (UAH)</h2>
             <div class="chart-actions">
+              <select id="chartTagGroupSelect" class="chart-group-select" aria-label="Tag group for share chart">
+                <option value="0">No groups defined</option>
+              </select>
               <p id="tagChartNet" class="chart-net">Net UAH: 0.00</p>
               <button id="tagLegendToggle" type="button" class="btn btn-light chart-legend-toggle">Hide all</button>
             </div>
           </div>
-          <p class="chart-note">Rows with multiple tags are counted fully in each tag.</p>
           <div class="chart-canvas-wrap">
             <canvas id="tagChart"></canvas>
           </div>
         </div>
+      </section>
 
-        <div class="priority-legend" aria-label="Priority legend">
-          <span class="priority-chip p0">P0 - Unavoidable</span>
-          <span class="priority-chip p1">P1 - Important</span>
-          <span class="priority-chip p2">P2 - Moderately important</span>
-          <span class="priority-chip p3">P3 - Could be reduced</span>
+      <section id="tagsScreen" class="screen" aria-label="Tags screen">
+        <div class="panel tags-panel">
+          <h2>Tag groups taxonomy</h2>
+          <p class="data-ops-note">
+            One line is one named group. Use this format:
+            <code>Group name: tag1, tag2, tag3</code>
+          </p>
+          <label class="tags-editor-label">
+            Groups
+            <textarea id="tagGroupsTextarea" placeholder="Priorities: P0, P1, P2, P3&#10;Personal: Bogdan personal, Yulia personal, Shared expenses"></textarea>
+          </label>
+          <div class="data-ops-actions">
+            <button id="applyTagGroupsButton" type="button" class="btn btn-primary">Apply taxonomy</button>
+            <p id="tagGroupsMeta" class="meta"></p>
+          </div>
+          <ul id="tagGroupsIssues" class="tag-issues-list"></ul>
         </div>
       </section>
 
