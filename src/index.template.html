@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Expense Consolidator</title>
+    <style>
+      /*__INLINE_CSS__*/
+    </style>
+  </head>
+  <body>
+    <div class="page-bg" aria-hidden="true"></div>
+
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Single File Tool</p>
+          <h1>Expense Consolidator</h1>
+          <p class="hero-subtitle">
+            Import many CSV files, merge with stable deduplication, keep manual edits, and review UAH totals.
+          </p>
+        </div>
+      </header>
+
+      <nav class="screen-nav" aria-label="Main navigation">
+        <button class="screen-tab active" type="button" data-screen="data">Data</button>
+        <button class="screen-tab" type="button" data-screen="charts">Charts</button>
+        <button class="screen-tab" type="button" data-screen="data-ops">Data Ops</button>
+      </nav>
+
+      <section id="dataScreen" class="screen active" aria-label="Data screen">
+        <div class="panel filters-panel">
+          <h2>Filters</h2>
+          <div class="filters-grid">
+            <label>
+              Search
+              <input id="filterSearch" type="text" placeholder="final/original category, notes, currency, tag" />
+            </label>
+            <label>
+              Tag
+              <input id="filterTag" type="text" placeholder="any tag" />
+            </label>
+            <label>
+              Date from
+              <input id="filterDateFrom" type="datetime-local" />
+            </label>
+            <label>
+              Date to
+              <input id="filterDateTo" type="datetime-local" />
+            </label>
+            <label>
+              Conversion status
+              <select id="filterStatus">
+                <option value="all">All</option>
+                <option value="resolved">Resolved</option>
+                <option value="unresolved">Unresolved</option>
+              </select>
+            </label>
+            <button id="clearFilters" type="button" class="btn btn-light">Clear filters</button>
+          </div>
+        </div>
+
+        <div class="panel table-panel">
+          <div class="table-header">
+            <h2>Merged records</h2>
+            <div class="table-header-actions">
+              <p id="tableMeta" class="meta"></p>
+              <button id="toggleExtraColumns" type="button" class="btn btn-light">Show extra columns</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="recordsTable" class="records-table hide-extra-columns">
+              <thead>
+                <tr>
+                  <th class="date-column">Date</th>
+                  <th class="uah-column">UAH</th>
+                  <th class="final-category-column">Final Category</th>
+                  <th class="tags-column">Tags</th>
+                  <th class="extra-column">Price</th>
+                  <th class="extra-column">Currency</th>
+                  <th class="notes-column">Notes</th>
+                  <th class="extra-column">Original CSV Category</th>
+                  <th class="extra-column">Original Source Full Category</th>
+                  <th class="extra-column">Rate</th>
+                  <th class="extra-column">Rate Type</th>
+                  <th class="extra-column">Rate source</th>
+                </tr>
+              </thead>
+              <tbody id="rowsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="priority-legend" aria-label="Priority legend">
+          <span class="priority-chip p0">P0 - Unavoidable</span>
+          <span class="priority-chip p1">P1 - Important</span>
+          <span class="priority-chip p2">P2 - Moderately important</span>
+          <span class="priority-chip p3">P3 - Could be reduced</span>
+        </div>
+      </section>
+
+      <section id="chartsScreen" class="screen" aria-label="Charts screen">
+        <div class="panel chart-filters-panel">
+          <h2>Shared Date Filter</h2>
+          <div class="chart-filters-grid">
+            <label>
+              Date from
+              <input id="chartFilterDateFrom" type="datetime-local" />
+            </label>
+            <label>
+              Date to
+              <input id="chartFilterDateTo" type="datetime-local" />
+            </label>
+            <button id="clearChartFilters" type="button" class="btn btn-light">Clear shared dates</button>
+          </div>
+        </div>
+
+        <div class="cards-grid">
+          <article class="summary-card">
+            <h3>Net UAH</h3>
+            <p id="cardNet" class="metric">0.00</p>
+            <p id="cardNetInflow" class="metric-subtle">Total inflow: 0.00 · Total outflow: 0.00</p>
+          </article>
+          <article class="summary-card">
+            <h3>Selected days</h3>
+            <p id="cardSelectedDays" class="metric">—</p>
+          </article>
+          <article class="summary-card">
+            <h3>Unresolved rows</h3>
+            <p id="cardUnresolved" class="metric">0</p>
+          </article>
+        </div>
+
+        <div class="panel chart-panel">
+          <div class="chart-title-row">
+            <h2>Share by final category (UAH)</h2>
+            <div class="chart-actions">
+              <p id="categoryChartNet" class="chart-net">Net UAH: 0.00</p>
+              <button id="categoryLegendToggle" type="button" class="btn btn-light chart-legend-toggle">Hide all</button>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+
+        <div class="panel chart-panel">
+          <div class="chart-title-row">
+            <h2>Share by tag (UAH)</h2>
+            <div class="chart-actions">
+              <p id="tagChartNet" class="chart-net">Net UAH: 0.00</p>
+              <button id="tagLegendToggle" type="button" class="btn btn-light chart-legend-toggle">Hide all</button>
+            </div>
+          </div>
+          <p class="chart-note">Rows with multiple tags are counted fully in each tag.</p>
+          <div class="chart-canvas-wrap">
+            <canvas id="tagChart"></canvas>
+          </div>
+        </div>
+
+        <div class="priority-legend" aria-label="Priority legend">
+          <span class="priority-chip p0">P0 - Unavoidable</span>
+          <span class="priority-chip p1">P1 - Important</span>
+          <span class="priority-chip p2">P2 - Moderately important</span>
+          <span class="priority-chip p3">P3 - Could be reduced</span>
+        </div>
+      </section>
+
+      <section id="dataOpsScreen" class="screen" aria-label="Data operations screen">
+        <div class="panel data-ops-panel">
+          <h2>CSV import</h2>
+          <p class="data-ops-note">
+            Import files over existing data any number of times. Rows are merged with stable deduplication and
+            manual edits are preserved.
+          </p>
+          <div class="data-ops-actions">
+            <label class="file-picker">
+              <input id="fileInput" type="file" accept=".csv,text/csv" multiple />
+              <span>Select CSV files</span>
+            </label>
+            <button id="importButton" type="button" class="btn btn-primary">Import files</button>
+          </div>
+        </div>
+
+        <div class="panel data-ops-panel">
+          <h2>Database JSON export</h2>
+          <p class="data-ops-note">Download the exact snapshot currently stored in localStorage.</p>
+          <div class="data-ops-actions">
+            <button id="exportDbButton" type="button" class="btn btn-light">Export DB JSON</button>
+          </div>
+        </div>
+
+        <div class="panel data-ops-panel">
+          <h2>Database JSON import</h2>
+          <p class="data-ops-note">
+            Import replaces all current local data after confirmation. Unsupported or invalid snapshots are rejected.
+          </p>
+          <div class="data-ops-actions">
+            <label class="file-picker">
+              <input id="dbImportInput" type="file" accept=".json,application/json" />
+              <span>Select DB JSON</span>
+            </label>
+            <button id="importDbButton" type="button" class="btn btn-primary">Import DB JSON</button>
+            <button id="resetButton" type="button" class="btn btn-ghost">Clear local data</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      //__INLINE_JS__
+    </script>
+  </body>
+</html>

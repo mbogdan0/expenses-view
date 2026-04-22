@@ -1,0 +1,17 @@
+{
+  "name": "expense-single-html-consolidator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.9"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.3"
+  }
+}
