@@ -58,7 +58,7 @@ function createTagGroups({ isValid = true, hasGroups = true } = {}) {
   };
 }
 
-function createTableHarness(rows) {
+function createTableHarness(rows, overrides = {}) {
   const rowsById = Object.fromEntries(rows.map((row) => [row.id, row]));
   const app = {
     state: {
@@ -85,6 +85,14 @@ function createTableHarness(rows) {
     bulkAddTagButton: { disabled: true },
     bulkRemoveTagButton: { disabled: true }
   };
+
+  const defaultSetStatus = () => {};
+  const defaultRender = () => {};
+  const defaultValidateRowTagsAgainstGroups = () => ({
+    taxonomyValid: true,
+    isValid: true,
+    errors: []
+  });
 
   const tableUi = createTableUi({
     app,
@@ -129,11 +137,8 @@ function createTableHarness(rows) {
           },
     recomputeDerivedRows: (rowsValue) => rowsValue,
     sortRowsByDateDesc: (rowsValue) => rowsValue,
-    validateRowTagsAgainstGroups: () => ({
-      taxonomyValid: true,
-      isValid: true,
-      errors: []
-    }),
+    validateRowTagsAgainstGroups:
+      overrides.validateRowTagsAgainstGroups || defaultValidateRowTagsAgainstGroups,
     applyBulkTagMutation: () => ({
       rowsById,
       stats: {
@@ -150,9 +155,9 @@ function createTableHarness(rows) {
     escapeHtml: (value) => String(value || ''),
     escapeAttribute: (value) => String(value || ''),
     formatFinalCategoryHtml: (value) => String(value || ''),
-    setStatus: () => {},
+    setStatus: overrides.setStatus || defaultSetStatus,
     saveState: () => {},
-    render: () => {}
+    render: overrides.render || defaultRender
   });
 
   return { app, elements, tableUi };
@@ -305,6 +310,42 @@ test('date update keeps existing time part', () => {
   });
 
   assert.equal(app.state.rowsById.r1.overrides.date, '2026-04-05 11:00');
+});
+
+test('tag edit rejects invalid taxonomy and leaves overrides unchanged', () => {
+  const row = createRow('r1');
+  const statusMessages = [];
+  let renderCalls = 0;
+  const { app, tableUi } = createTableHarness([row], {
+    validateRowTagsAgainstGroups: () => ({
+      taxonomyValid: false,
+      isValid: false,
+      errors: ['Unknown tags: P0']
+    }),
+    setStatus: (message) => {
+      statusMessages.push(message);
+    },
+    render: () => {
+      renderCalls += 1;
+    }
+  });
+
+  tableUi.onRowsBodyChange({
+    target: {
+      dataset: { field: 'tags' },
+      value: 'P0',
+      closest: () => ({
+        dataset: { rowId: 'r1' }
+      })
+    }
+  });
+
+  assert.equal(app.state.rowsById.r1.overrides.tags, undefined);
+  assert.equal(
+    statusMessages[0],
+    'Tag update rejected: tag taxonomy has duplicate tags across groups.'
+  );
+  assert.equal(renderCalls, 1);
 });
 
 test('renderDataTable shows date-only input and full datetime title', () => {

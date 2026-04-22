@@ -327,6 +327,58 @@ test('recomputeDerivedRows marks rows without available rate as unresolved', () 
   assert.equal(rowsById[normalized.id].derived.usdConversionStatus, 'missing_manual_rate');
 });
 
+test('recomputeDerivedRows returns deterministic output for identical input', () => {
+  const rowsById = {
+    one: {
+      id: 'one',
+      source: {
+        id: 'one',
+        date: '2026-04-01 11:00',
+        category: 'Cat',
+        sourceFullCategory: 'Main / One',
+        price: '-100',
+        currency: 'UAH',
+        rate: '',
+        rateType: '',
+        notes: '',
+        image: '',
+        tags: []
+      },
+      overrides: {
+        tags: ['P0']
+      },
+      derived: {}
+    },
+    two: {
+      id: 'two',
+      source: {
+        id: 'two',
+        date: '2026-04-02 12:00',
+        category: 'Cat',
+        sourceFullCategory: 'Main / Two',
+        price: '-50',
+        currency: 'USD',
+        rate: '',
+        rateType: '',
+        notes: '',
+        image: '',
+        tags: []
+      },
+      overrides: {},
+      derived: {}
+    }
+  };
+
+  const tagGroups = 'Priorities: P0, P1';
+  const categoryMerge = '"Main / One";"Main / Two"';
+  const manualUsdRates = '"2026-04-02";"UAH/USD";"43.5"';
+
+  const first = recomputeDerivedRows(structuredClone(rowsById), tagGroups, categoryMerge, manualUsdRates);
+  const second = recomputeDerivedRows(structuredClone(rowsById), tagGroups, categoryMerge, manualUsdRates);
+
+  assert.deepEqual(second, first);
+});
+
 test('computeEffectiveRow keeps source values and applies overrides', () => {
   const source = {
     id: 'x',
