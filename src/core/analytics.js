@@ -1,4 +1,6 @@
 import {
+  DISPLAY_CURRENCY_UAH,
+  DISPLAY_CURRENCY_USD,
   TAG_GROUP_INVALID_LABEL,
   TAG_GROUP_NO_TAG_LABEL
 } from './constants.js';
@@ -17,43 +19,108 @@ export function sortRowsByDateDesc(rowRecords) {
   });
 }
 
-export function summarizeUah(rows) {
+export function normalizeDisplayCurrency(displayCurrency) {
+  return displayCurrency === DISPLAY_CURRENCY_USD ? DISPLAY_CURRENCY_USD : DISPLAY_CURRENCY_UAH;
+}
+
+export function getRowConversionForDisplayCurrency(row, displayCurrency = DISPLAY_CURRENCY_UAH) {
+  const normalizedCurrency = normalizeDisplayCurrency(displayCurrency);
+
+  if (normalizedCurrency === DISPLAY_CURRENCY_USD) {
+    return {
+      displayCurrency: normalizedCurrency,
+      status: row.derived?.usdConversionStatus || 'missing_manual_rate',
+      unresolved: Boolean(row.derived?.usdUnresolved),
+      warning: row.derived?.usdWarning || null,
+      usedRate: row.derived?.usdUsedRate ?? null,
+      rateSource: row.derived?.usdRateSource ?? null,
+      amount: row.derived?.usdAmount ?? null
+    };
+  }
+
+  return {
+    displayCurrency: DISPLAY_CURRENCY_UAH,
+    status: row.derived?.conversionStatus || 'missing_rate',
+    unresolved: Boolean(row.derived?.unresolved),
+    warning: row.derived?.warning || null,
+    usedRate: row.derived?.usedRate ?? null,
+    rateSource: row.derived?.rateSource ?? null,
+    amount: row.derived?.uahAmount ?? null
+  };
+}
+
+export function summarizeRowsByDisplayCurrency(rows, displayCurrency = DISPLAY_CURRENCY_UAH) {
   let net = 0;
   let outflow = 0;
   let inflow = 0;
   let unresolved = 0;
 
   for (const row of rows) {
-    const amount = row.derived?.uahAmount;
-    if (row.derived?.unresolved || amount === null || amount === undefined) {
+    const conversion = getRowConversionForDisplayCurrency(row, displayCurrency);
+    if (conversion.unresolved || conversion.amount === null || conversion.amount === undefined) {
       unresolved += 1;
       continue;
     }
 
-    net += amount;
-    if (amount < 0) {
-      outflow += Math.abs(amount);
+    net += conversion.amount;
+    if (conversion.amount < 0) {
+      outflow += Math.abs(conversion.amount);
     } else {
-      inflow += amount;
+      inflow += conversion.amount;
     }
   }
 
   return { net, outflow, inflow, unresolved };
 }
 
-export function buildCategoryPieDatasetUAHAbsoluteNet(rows) {
+export function summarizeUah(rows) {
+  return summarizeRowsByDisplayCurrency(rows, DISPLAY_CURRENCY_UAH);
+}
+
+export function buildCategoryPieDatasetAbsoluteNet(rows, displayCurrency = DISPLAY_CURRENCY_UAH) {
   const totals = new Map();
 
   for (const row of rows) {
-    const amount = row.derived?.uahAmount;
-    if (row.derived?.unresolved || amount === null || amount === undefined) {
+    const conversion = getRowConversionForDisplayCurrency(row, displayCurrency);
+    if (conversion.unresolved || conversion.amount === null || conversion.amount === undefined) {
       continue;
     }
 
     const effective = computeEffectiveRow(row.source, row.overrides);
     const category =
       row.derived?.finalFullCategory || effective.fullCategory || 'Uncategorized';
-    totals.set(category, (totals.get(category) || 0) + amount);
+    totals.set(category, (totals.get(category) || 0) + conversion.amount);
+  }
+
+  return Array.from(totals.entries())
+    .map(([label, signedNet]) => ({
+      label,
+      signedNet,
+      absoluteNet: Math.abs(signedNet)
+    }))
+    .filter((item) => item.absoluteNet > 0)
+    .sort((left, right) => right.absoluteNet - left.absoluteNet);
+}
+
+export function buildCategoryPieDatasetUAHAbsoluteNet(rows) {
+  return buildCategoryPieDatasetAbsoluteNet(rows, DISPLAY_CURRENCY_UAH);
+}
+
+export function buildTagPieDatasetAbsoluteNet(rows, displayCurrency = DISPLAY_CURRENCY_UAH) {
+  const totals = new Map();
+
+  for (const row of rows) {
+    const conversion = getRowConversionForDisplayCurrency(row, displayCurrency);
+    if (conversion.unresolved || conversion.amount === null || conversion.amount === undefined) {
+      continue;
+    }
+
+    const effective = computeEffectiveRow(row.source, row.overrides);
+    const tags = effective.tags.length ? effective.tags : ['No tag'];
+
+    for (const tag of tags) {
+      totals.set(tag, (totals.get(tag) || 0) + conversion.amount);
+    }
   }
 
   return Array.from(totals.entries())
@@ -67,33 +134,15 @@ export function buildCategoryPieDatasetUAHAbsoluteNet(rows) {
 }
 
 export function buildTagPieDatasetUAHAbsoluteNet(rows) {
-  const totals = new Map();
-
-  for (const row of rows) {
-    const amount = row.derived?.uahAmount;
-    if (row.derived?.unresolved || amount === null || amount === undefined) {
-      continue;
-    }
-
-    const effective = computeEffectiveRow(row.source, row.overrides);
-    const tags = effective.tags.length ? effective.tags : ['No tag'];
-
-    for (const tag of tags) {
-      totals.set(tag, (totals.get(tag) || 0) + amount);
-    }
-  }
-
-  return Array.from(totals.entries())
-    .map(([label, signedNet]) => ({
-      label,
-      signedNet,
-      absoluteNet: Math.abs(signedNet)
-    }))
-    .filter((item) => item.absoluteNet > 0)
-    .sort((left, right) => right.absoluteNet - left.absoluteNet);
+  return buildTagPieDatasetAbsoluteNet(rows, DISPLAY_CURRENCY_UAH);
 }
 
-export function buildTagGroupPieDatasetUAHAbsoluteNet(rows, tagGroupsInput, selectedGroupIndex = 0) {
+export function buildTagGroupPieDatasetAbsoluteNet(
+  rows,
+  tagGroupsInput,
+  selectedGroupIndex = 0,
+  displayCurrency = DISPLAY_CURRENCY_UAH
+) {
   const model = ensureTagGroupsModel(tagGroupsInput);
   if (!model.hasGroups || !model.isValid) {
     return [];
@@ -109,8 +158,8 @@ export function buildTagGroupPieDatasetUAHAbsoluteNet(rows, tagGroupsInput, sele
   const totals = new Map();
 
   for (const row of rows) {
-    const amount = row.derived?.uahAmount;
-    if (row.derived?.unresolved || amount === null || amount === undefined) {
+    const conversion = getRowConversionForDisplayCurrency(row, displayCurrency);
+    if (conversion.unresolved || conversion.amount === null || conversion.amount === undefined) {
       continue;
     }
 
@@ -134,7 +183,7 @@ export function buildTagGroupPieDatasetUAHAbsoluteNet(rows, tagGroupsInput, sele
           ? groupTags[0]
           : TAG_GROUP_INVALID_LABEL;
 
-    totals.set(label, (totals.get(label) || 0) + amount);
+    totals.set(label, (totals.get(label) || 0) + conversion.amount);
   }
 
   return Array.from(totals.entries())
@@ -145,6 +194,15 @@ export function buildTagGroupPieDatasetUAHAbsoluteNet(rows, tagGroupsInput, sele
     }))
     .filter((item) => item.absoluteNet > 0)
     .sort((left, right) => right.absoluteNet - left.absoluteNet);
+}
+
+export function buildTagGroupPieDatasetUAHAbsoluteNet(rows, tagGroupsInput, selectedGroupIndex = 0) {
+  return buildTagGroupPieDatasetAbsoluteNet(
+    rows,
+    tagGroupsInput,
+    selectedGroupIndex,
+    DISPLAY_CURRENCY_UAH
+  );
 }
 
 export function formatMoney(value) {

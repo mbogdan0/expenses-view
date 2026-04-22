@@ -22,7 +22,10 @@ function createRow(id) {
     derived: {
       unresolved: false,
       uahAmount: -10,
+      usdUnresolved: false,
+      usdAmount: -0.25,
       rateSource: 'same-currency',
+      usdRateSource: 'manual:UAH/USD:2026-04-01',
       tagValidation: {
         isValid: true,
         errors: []
@@ -62,7 +65,9 @@ function createTableHarness(rows) {
       rowsById,
       tagGroupsText: '',
       categoryMergeRulesText: '',
+      manualUsdRatesText: '',
       uiPrefs: {
+        displayCurrency: 'UAH',
         filters: {}
       }
     },
@@ -73,6 +78,7 @@ function createTableHarness(rows) {
   const elements = {
     rowsBody: { innerHTML: '' },
     tableMeta: { textContent: '' },
+    amountColumnHeader: { textContent: '' },
     selectVisibleRows: { checked: false, indeterminate: false },
     bulkSelectedCount: { textContent: '' },
     bulkTagSelect: { value: '', innerHTML: '' },
@@ -106,6 +112,21 @@ function createTableHarness(rows) {
         .map((tag) => tag.trim())
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
+    normalizeDisplayCurrency: (value) => (String(value || '').toUpperCase() === 'USD' ? 'USD' : 'UAH'),
+    getRowConversionForDisplayCurrency: (row, displayCurrency) =>
+      String(displayCurrency || '').toUpperCase() === 'USD'
+        ? {
+            unresolved: Boolean(row.derived?.usdUnresolved),
+            warning: row.derived?.usdWarning || null,
+            rateSource: row.derived?.usdRateSource || null,
+            amount: row.derived?.usdAmount ?? null
+          }
+        : {
+            unresolved: Boolean(row.derived?.unresolved),
+            warning: row.derived?.warning || null,
+            rateSource: row.derived?.rateSource || null,
+            amount: row.derived?.uahAmount ?? null
+          },
     recomputeDerivedRows: (rowsValue) => rowsValue,
     sortRowsByDateDesc: (rowsValue) => rowsValue,
     validateRowTagsAgainstGroups: () => ({
@@ -267,4 +288,77 @@ test('renderDataTable highlights final category when merge master is missing', (
     elements.rowsBody.innerHTML.includes('Child / Missing'),
     true
   );
+});
+
+test('date update keeps existing time part', () => {
+  const row = createRow('r1');
+  const { app, tableUi } = createTableHarness([row]);
+
+  tableUi.onRowsBodyChange({
+    target: {
+      dataset: { field: 'date' },
+      value: '2026-04-05',
+      closest: () => ({
+        dataset: { rowId: 'r1' }
+      })
+    }
+  });
+
+  assert.equal(app.state.rowsById.r1.overrides.date, '2026-04-05 11:00');
+});
+
+test('renderDataTable shows date-only input and full datetime title', () => {
+  const row = createRow('r1');
+  const { elements, tableUi } = createTableHarness([row]);
+
+  tableUi.renderDataTable([row]);
+
+  assert.equal(elements.rowsBody.innerHTML.includes('type="date"'), true);
+  assert.equal(elements.rowsBody.innerHTML.includes('type="datetime-local"'), false);
+  assert.equal(elements.rowsBody.innerHTML.includes('title="2026-04-01 11:00"'), true);
+});
+
+test('renderDataTable updates amount header and unresolved logic by display currency', () => {
+  const row = createRow('r1');
+  row.derived.unresolved = false;
+  row.derived.uahAmount = -10;
+  row.derived.rateSource = 'native';
+  row.derived.usdUnresolved = true;
+  row.derived.usdAmount = null;
+  row.derived.usdWarning = 'Missing manual USD rate for UAH/USD';
+  row.derived.usdRateSource = null;
+
+  const { app, elements, tableUi } = createTableHarness([row]);
+
+  app.state.uiPrefs.displayCurrency = 'UAH';
+  tableUi.renderDataTable([row]);
+  assert.equal(elements.amountColumnHeader.textContent, 'UAH');
+  assert.equal(elements.rowsBody.innerHTML.includes('unresolved-row'), false);
+  assert.equal(elements.tableMeta.textContent.includes('0 unresolved (UAH)'), true);
+
+  app.state.uiPrefs.displayCurrency = 'USD';
+  tableUi.renderDataTable([row]);
+  assert.equal(elements.amountColumnHeader.textContent, 'USD');
+  assert.equal(elements.rowsBody.innerHTML.includes('unresolved-row'), true);
+  assert.equal(elements.tableMeta.textContent.includes('1 unresolved (USD)'), true);
+});
+
+test('getVisibleRows applies status filter using selected display currency', () => {
+  const rowA = createRow('a');
+  rowA.derived.unresolved = false;
+  rowA.derived.usdUnresolved = true;
+  const rowB = createRow('b');
+  rowB.derived.unresolved = true;
+  rowB.derived.usdUnresolved = false;
+
+  const { app, tableUi } = createTableHarness([rowA, rowB]);
+  app.state.uiPrefs.filters.status = 'unresolved';
+
+  app.state.uiPrefs.displayCurrency = 'USD';
+  const usdRows = tableUi.getVisibleRows();
+  assert.deepEqual(usdRows.map((row) => row.id), ['a']);
+
+  app.state.uiPrefs.displayCurrency = 'UAH';
+  const uahRows = tableUi.getVisibleRows();
+  assert.deepEqual(uahRows.map((row) => row.id), ['b']);
 });

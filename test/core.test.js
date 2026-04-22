@@ -1,32 +1,63 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DISPLAY_CURRENCY_USD,
   TAG_GROUP_INVALID_LABEL,
   TAG_GROUP_NO_TAG_LABEL,
   applyBulkTagMutation,
+  buildCategoryPieDatasetAbsoluteNet,
   buildCategoryPieDatasetUAHAbsoluteNet,
   buildDedupId,
   buildPiePalette,
   buildTagGroupPieDatasetUAHAbsoluteNet,
+  buildUsdCoverageReport,
   buildSourceFullCategory,
   buildTagPieDatasetUAHAbsoluteNet,
   countSelectedCalendarDays,
   computeEffectiveRow,
   createEmptyState,
+  getRowConversionForDisplayCurrency,
   matchesFilter,
+  normalizeDisplayCurrency,
   normalizeTagGroupIndex,
   normalizeImportedRow,
   normalizeTags,
   parseCategoryMergeRulesText,
   parseExpenseCsv,
+  parseManualUsdRatesText,
   parseTagGroupsText,
   parseStateSnapshotJson,
   recomputeDerivedRows,
   resolveRate,
+  resolveUsdRate,
   sanitizeLoadedState,
   STORAGE_VERSION,
+  summarizeRowsByDisplayCurrency,
   validateRowTagsAgainstGroups
 } from '../src/core.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function dayOffsetDate(offsetDays) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+  return new Date(today + offsetDays * DAY_MS);
+}
+
+function toDateOnlyString(date) {
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function dayOffsetString(offsetDays) {
+  return toDateOnlyString(dayOffsetDate(offsetDays));
+}
+
+function dayOffsetDateTime(offsetDays) {
+  return `${dayOffsetString(offsetDays)} 12:00`;
+}
 
 test('buildSourceFullCategory combines filename and category', () => {
   const full = buildSourceFullCategory('🌿 Богдан.csv', 'Coffee');
@@ -116,6 +147,164 @@ test('resolveRate uses nearest same-currency row when explicit rate is missing',
   assert.equal(result.uahAmount, -432);
 });
 
+test('parseManualUsdRatesText parses strict lines and reports format issues', () => {
+  const parsed = parseManualUsdRatesText(
+    '"2026-04-01";"UAH/USD";"43.50"\n' +
+      '"2026-04-02";"GEL/USD";"2.78"\n' +
+      '2026-04-03;UAH/USD;43.1\n' +
+      '"2026-02-31";"UAH/USD";"43.1"\n' +
+      '"2026-04-03";"UAH/USD";"-1"'
+  );
+
+  assert.equal(parsed.entries.length, 2);
+  assert.equal(parsed.entries[0].pair, 'UAH/USD');
+  assert.equal(parsed.entries[0].date, '2026-04-01');
+  assert.equal(parsed.entries[0].rate, 43.5);
+  assert.equal(parsed.entries[1].pair, 'GEL/USD');
+  assert.equal(parsed.issues.length, 3);
+  assert.equal(parsed.issues.some((issue) => issue.type === 'invalid_format'), true);
+  assert.equal(parsed.issues.some((issue) => issue.type === 'invalid_date'), true);
+  assert.equal(parsed.issues.some((issue) => issue.type === 'invalid_rate'), true);
+});
+
+test('buildUsdCoverageReport requests missing checkpoints in fixed windows', () => {
+  const rows = [
+    { id: 'a', date: '2026-04-01 11:00', currency: 'UAH', price: '-100' },
+    { id: 'b', date: '2026-04-22 09:00', currency: 'UAH', price: '-200' },
+    { id: 'c', date: '2026-04-02 11:00', currency: 'GEL', price: '-10' },
+    { id: 'd', date: '2026-04-12 11:00', currency: 'GEL', price: '-20' }
+  ];
+
+  const report = buildUsdCoverageReport(
+    rows,
+    '"2026-04-01";"UAH/USD";"43.5"\n"2026-04-21";"UAH/USD";"43.8"\n"2026-04-03";"GEL/USD";"2.78"',
+    10
+  );
+
+  assert.equal(report.requiredPairs.includes('UAH/USD'), true);
+  assert.equal(report.requiredPairs.includes('GEL/USD'), true);
+  assert.equal(report.isComplete, false);
+  assert.deepEqual(report.missingRequests, [
+    { date: '2026-04-12', pair: 'GEL/USD', line: '"2026-04-12";"GEL/USD"' },
+    { date: '2026-04-11', pair: 'UAH/USD', line: '"2026-04-11";"UAH/USD"' }
+  ]);
+});
+
+test('resolveUsdRate uses nearest manual pair rate and divides by rate', () => {
+  const model = parseManualUsdRatesText(
+    '"2026-04-01";"UAH/USD";"43.5"\n' +
+      '"2026-04-11";"UAH/USD";"44.0"\n' +
+      '"2026-04-09";"UAH/USD";"43.8"'
+  );
+
+  const result = resolveUsdRate(
+    {
+      id: 'x',
+      date: '2026-04-10 10:00',
+      currency: 'UAH',
+      price: '-438'
+    },
+    model
+  );
+
+  assert.equal(result.status, 'resolved');
+  assert.equal(result.usedRate, 44);
+  assert.equal(result.usdAmount, -438 / 44);
+  assert.equal(result.rateSource, 'manual:UAH/USD:2026-04-11');
+});
+
+test('resolveUsdRate prefers later rate when distance tie', () => {
+  const model = parseManualUsdRatesText(
+    '"2026-04-08";"UAH/USD";"43.0"\n' +
+      '"2026-04-10";"UAH/USD";"44.0"'
+  );
+
+  const result = resolveUsdRate(
+    {
+      id: 'x',
+      date: '2026-04-09 12:00',
+      currency: 'UAH',
+      price: '-440'
+    },
+    model
+  );
+
+  assert.equal(result.status, 'resolved');
+  assert.equal(result.usedRate, 44);
+  assert.equal(result.rateSource, 'manual:UAH/USD:2026-04-10');
+  assert.equal(result.usdAmount, -10);
+});
+
+test('buildUsdCoverageReport never requests future checkpoint dates', () => {
+  const todayString = dayOffsetString(0);
+  const rows = [
+    { id: 'a', date: dayOffsetDateTime(-2), currency: 'UAH', price: '-100' },
+    { id: 'b', date: dayOffsetDateTime(25), currency: 'UAH', price: '-200' }
+  ];
+
+  const report = buildUsdCoverageReport(rows, '', 10);
+  assert.equal(report.missingRequests.length >= 1, true);
+  assert.equal(report.missingRequests.some((item) => item.date > todayString), false);
+});
+
+test('buildUsdCoverageReport caps mixed past/future ranges at today', () => {
+  const todayString = dayOffsetString(0);
+  const rows = [
+    { id: 'a', date: dayOffsetDateTime(-7), currency: 'GEL', price: '-10' },
+    { id: 'b', date: dayOffsetDateTime(9), currency: 'GEL', price: '-20' }
+  ];
+
+  const report = buildUsdCoverageReport(rows, '', 5);
+  assert.equal(report.requiredPairs.includes('GEL/USD'), true);
+  assert.equal(report.missingRequests.some((item) => item.pair === 'GEL/USD' && item.date > todayString), false);
+});
+
+test('resolveUsdRate for future row uses latest known historical rate', () => {
+  const ratePastA = dayOffsetString(-10);
+  const ratePastB = dayOffsetString(-2);
+  const rateFuture = dayOffsetString(5);
+  const model = parseManualUsdRatesText(
+    `"${ratePastA}";"UAH/USD";"42.0"\n` +
+      `"${ratePastB}";"UAH/USD";"43.5"\n` +
+      `"${rateFuture}";"UAH/USD";"60.0"`
+  );
+
+  const result = resolveUsdRate(
+    {
+      id: 'x',
+      date: dayOffsetDateTime(12),
+      currency: 'UAH',
+      price: '-435'
+    },
+    model
+  );
+
+  assert.equal(result.status, 'resolved');
+  assert.equal(result.usedRate, 43.5);
+  assert.equal(result.rateSource, `manual:UAH/USD:${ratePastB}`);
+  assert.equal(result.usdAmount, -10);
+});
+
+test('resolveUsdRate keeps future row unresolved without known historical rate', () => {
+  const onlyFutureRate = dayOffsetString(3);
+  const model = parseManualUsdRatesText(
+    `"${onlyFutureRate}";"UAH/USD";"50.0"`
+  );
+
+  const result = resolveUsdRate(
+    {
+      id: 'x',
+      date: dayOffsetDateTime(12),
+      currency: 'UAH',
+      price: '-500'
+    },
+    model
+  );
+
+  assert.equal(result.status, 'missing_manual_rate');
+  assert.equal(result.unresolved, true);
+});
+
 test('recomputeDerivedRows marks rows without available rate as unresolved', () => {
   const normalized = normalizeImportedRow(
     {
@@ -134,6 +323,8 @@ test('recomputeDerivedRows marks rows without available rate as unresolved', () 
   const rowsById = recomputeDerivedRows({ [normalized.id]: normalized });
   assert.equal(rowsById[normalized.id].derived.unresolved, true);
   assert.equal(rowsById[normalized.id].derived.conversionStatus, 'missing_rate');
+  assert.equal(rowsById[normalized.id].derived.usdUnresolved, true);
+  assert.equal(rowsById[normalized.id].derived.usdConversionStatus, 'missing_manual_rate');
 });
 
 test('computeEffectiveRow keeps source values and applies overrides', () => {
@@ -212,6 +403,74 @@ test('buildCategoryPieDatasetUAHAbsoluteNet uses absolute weight from signed net
     { label: 'Food', signedNet: -60, absoluteNet: 60 },
     { label: 'Rent', signedNet: -20, absoluteNet: 20 }
   ]);
+});
+
+test('display currency helpers switch summaries and datasets between UAH and USD', () => {
+  const rows = [
+    {
+      source: {
+        id: 'a',
+        category: 'Original',
+        sourceFullCategory: 'File / Food',
+        tags: []
+      },
+      overrides: {
+        fullCategory: 'Food'
+      },
+      derived: {
+        unresolved: false,
+        uahAmount: -100,
+        usdUnresolved: false,
+        usdAmount: -2.5
+      }
+    },
+    {
+      source: {
+        id: 'b',
+        category: 'Original',
+        sourceFullCategory: 'File / Food',
+        tags: []
+      },
+      overrides: {
+        fullCategory: 'Food'
+      },
+      derived: {
+        unresolved: false,
+        uahAmount: 40,
+        usdUnresolved: false,
+        usdAmount: 1
+      }
+    },
+    {
+      source: {
+        id: 'c',
+        category: 'Original',
+        sourceFullCategory: 'File / Rent',
+        tags: []
+      },
+      overrides: {
+        fullCategory: 'Rent'
+      },
+      derived: {
+        unresolved: false,
+        uahAmount: -20,
+        usdUnresolved: true,
+        usdAmount: null
+      }
+    }
+  ];
+
+  assert.equal(normalizeDisplayCurrency('usd'), 'UAH');
+  assert.equal(normalizeDisplayCurrency(DISPLAY_CURRENCY_USD), DISPLAY_CURRENCY_USD);
+  assert.equal(getRowConversionForDisplayCurrency(rows[0], DISPLAY_CURRENCY_USD).amount, -2.5);
+
+  const uahSummary = summarizeRowsByDisplayCurrency(rows, 'UAH');
+  const usdSummary = summarizeRowsByDisplayCurrency(rows, DISPLAY_CURRENCY_USD);
+  assert.deepEqual(uahSummary, { net: -80, outflow: 120, inflow: 40, unresolved: 0 });
+  assert.deepEqual(usdSummary, { net: -1.5, outflow: 2.5, inflow: 1, unresolved: 1 });
+
+  const usdPie = buildCategoryPieDatasetAbsoluteNet(rows, DISPLAY_CURRENCY_USD);
+  assert.deepEqual(usdPie, [{ label: 'Food', signedNet: -1.5, absoluteNet: 1.5 }]);
 });
 
 test('recomputeDerivedRows applies category merge rules and flags missing masters', () => {
@@ -780,6 +1039,16 @@ test('sanitizeLoadedState normalizes filter dates to YYYY-MM-DD and defaults tag
   assert.equal(withoutBoolean.uiPrefs.filters.tagsLt2Only, false);
 });
 
+test('sanitizeLoadedState defaults displayCurrency and manualUsdRatesText when missing', () => {
+  const state = createEmptyState();
+  delete state.manualUsdRatesText;
+  delete state.uiPrefs.displayCurrency;
+
+  const sanitized = sanitizeLoadedState(state);
+  assert.equal(sanitized.manualUsdRatesText, '');
+  assert.equal(sanitized.uiPrefs.displayCurrency, 'UAH');
+});
+
 test('parseStateSnapshotJson accepts valid current snapshot', () => {
   const snapshot = createEmptyState();
   snapshot.uiPrefs.activeScreen = 'data-ops';
@@ -798,6 +1067,15 @@ test('parseStateSnapshotJson accepts snapshot without categoryMergeRulesText', (
   const parsed = parseStateSnapshotJson(JSON.stringify(snapshot));
   assert.equal(parsed.ok, true);
   assert.equal(parsed.state.categoryMergeRulesText, '');
+});
+
+test('parseStateSnapshotJson accepts snapshot without manualUsdRatesText', () => {
+  const snapshot = createEmptyState();
+  delete snapshot.manualUsdRatesText;
+
+  const parsed = parseStateSnapshotJson(JSON.stringify(snapshot));
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.state.manualUsdRatesText, '');
 });
 
 test('parseStateSnapshotJson rejects invalid JSON', () => {
@@ -822,4 +1100,13 @@ test('parseStateSnapshotJson rejects missing required shape', () => {
   const parsed = parseStateSnapshotJson(JSON.stringify(snapshot));
   assert.equal(parsed.ok, false);
   assert.match(parsed.error, /uiPrefs\.activeScreen/);
+});
+
+test('parseStateSnapshotJson rejects invalid displayCurrency', () => {
+  const snapshot = createEmptyState();
+  snapshot.uiPrefs.displayCurrency = 'EUR';
+
+  const parsed = parseStateSnapshotJson(JSON.stringify(snapshot));
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.error, /uiPrefs\.displayCurrency/);
 });

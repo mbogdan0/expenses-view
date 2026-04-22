@@ -1,6 +1,8 @@
 import {
+  DISPLAY_CURRENCY_UAH,
   SCREEN_DATA,
   STORAGE_VERSION,
+  supportedDisplayCurrencies,
   supportedFilterStatus,
   supportedScreens
 } from './constants.js';
@@ -17,11 +19,13 @@ export function createEmptyState() {
     version: STORAGE_VERSION,
     tagGroupsText: '',
     categoryMergeRulesText: '',
+    manualUsdRatesText: '',
     rowsById: {},
     importHistory: [],
     uiPrefs: {
       activeScreen: SCREEN_DATA,
       selectedTagGroup: 0,
+      displayCurrency: DISPLAY_CURRENCY_UAH,
       showExtraColumns: false,
       filters: {
         search: '',
@@ -55,6 +59,10 @@ export function validateStateSnapshot(snapshot) {
 
   if (hasOwn(snapshot, 'categoryMergeRulesText') && typeof snapshot.categoryMergeRulesText !== 'string') {
     return 'Snapshot categoryMergeRulesText must be a string when provided.';
+  }
+
+  if (hasOwn(snapshot, 'manualUsdRatesText') && typeof snapshot.manualUsdRatesText !== 'string') {
+    return 'Snapshot manualUsdRatesText must be a string when provided.';
   }
 
   for (const [rowId, record] of Object.entries(snapshot.rowsById)) {
@@ -95,6 +103,13 @@ export function validateStateSnapshot(snapshot) {
 
   if (!Number.isInteger(snapshot.uiPrefs.selectedTagGroup) || snapshot.uiPrefs.selectedTagGroup < 0) {
     return 'Snapshot uiPrefs.selectedTagGroup must be a non-negative integer.';
+  }
+
+  if (
+    hasOwn(snapshot.uiPrefs, 'displayCurrency') &&
+    !supportedDisplayCurrencies.has(snapshot.uiPrefs.displayCurrency)
+  ) {
+    return 'Snapshot uiPrefs.displayCurrency is invalid.';
   }
 
   if (typeof snapshot.uiPrefs.showExtraColumns !== 'boolean') {
@@ -213,6 +228,10 @@ export function sanitizeLoadedState(maybeState) {
     typeof maybeState.categoryMergeRulesText === 'string'
       ? maybeState.categoryMergeRulesText
       : base.categoryMergeRulesText;
+  const manualUsdRatesText =
+    typeof maybeState.manualUsdRatesText === 'string'
+      ? maybeState.manualUsdRatesText
+      : base.manualUsdRatesText;
   const parsedTagGroups = parseTagGroupsText(tagGroupsText);
 
   const state = {
@@ -221,6 +240,7 @@ export function sanitizeLoadedState(maybeState) {
     version: STORAGE_VERSION,
     tagGroupsText,
     categoryMergeRulesText,
+    manualUsdRatesText,
     rowsById,
     importHistory,
     uiPrefs: {
@@ -229,6 +249,9 @@ export function sanitizeLoadedState(maybeState) {
         maybeUiPrefs.selectedTagGroup,
         parsedTagGroups.groups.length
       ),
+      displayCurrency: supportedDisplayCurrencies.has(maybeUiPrefs.displayCurrency)
+        ? maybeUiPrefs.displayCurrency
+        : base.uiPrefs.displayCurrency,
       showExtraColumns: Boolean(maybeUiPrefs.showExtraColumns),
       filters: {
         ...base.uiPrefs.filters,
@@ -247,7 +270,8 @@ export function sanitizeLoadedState(maybeState) {
   state.rowsById = recomputeDerivedRows(
     state.rowsById,
     state.tagGroupsText,
-    state.categoryMergeRulesText
+    state.categoryMergeRulesText,
+    state.manualUsdRatesText
   );
   return state;
 }

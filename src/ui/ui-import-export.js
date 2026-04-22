@@ -15,6 +15,8 @@ export function createImportExportUi({
   saveState,
   render,
   hydrateFilterInputs,
+  hydrateManualUsdRatesInputs,
+  hydrateDisplayCurrencyButtons,
   applyScreen
 }) {
   async function importFromPicker() {
@@ -63,7 +65,8 @@ export function createImportExportUi({
       app.state.rowsById = recomputeDerivedRows(
         app.state.rowsById,
         app.state.tagGroupsText,
-        app.state.categoryMergeRulesText
+        app.state.categoryMergeRulesText,
+        app.state.manualUsdRatesText
       );
       saveState(
         `Imported ${files.length} file(s): ${totalRows} rows parsed, ${added} added, ${updated} deduplicated.`
@@ -164,6 +167,8 @@ export function createImportExportUi({
       app.state = parsed.state;
       saveState('DB JSON imported.');
       hydrateFilterInputs();
+      hydrateManualUsdRatesInputs?.();
+      hydrateDisplayCurrencyButtons?.();
       applyScreen(app.state.uiPrefs.activeScreen || screenData);
       render();
       elements.dbImportInput.value = '';
@@ -206,6 +211,8 @@ export function createImportExportUi({
     app.state = createEmptyState();
     saveState('Local data cleared.');
     hydrateFilterInputs();
+    hydrateManualUsdRatesInputs?.();
+    hydrateDisplayCurrencyButtons?.();
     applyScreen(app.state.uiPrefs.activeScreen || screenData);
     render();
   }

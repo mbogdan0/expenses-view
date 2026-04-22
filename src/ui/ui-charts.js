@@ -4,20 +4,34 @@ export function createChartsUi({
   app,
   elements,
   formatMoney,
-  summarizeUah,
+  normalizeDisplayCurrency,
+  summarizeRowsByDisplayCurrency,
   countSelectedCalendarDays,
-  buildCategoryPieDatasetUAHAbsoluteNet,
-  buildTagGroupPieDatasetUAHAbsoluteNet,
+  buildCategoryPieDatasetAbsoluteNet,
+  buildTagGroupPieDatasetAbsoluteNet,
   buildPiePalette,
   normalizeTagGroupIndex,
   buildTagGroupPreviewLabel,
   escapeHtml
 }) {
-  function renderCharts(rows, tagGroups) {
-    const summary = summarizeUah(rows);
+  function renderCharts(rows, tagGroups, displayCurrencyInput) {
+    const displayCurrency = normalizeDisplayCurrency(displayCurrencyInput);
+    const summary = summarizeRowsByDisplayCurrency(rows, displayCurrency);
+
+    if (elements.cardNetTitle) {
+      elements.cardNetTitle.textContent = `Net ${displayCurrency}`;
+    }
     elements.cardNet.textContent = formatMoney(summary.net);
-    elements.cardNetInflow.textContent = `Total inflow: ${formatMoney(summary.inflow)} · Total outflow: ${formatMoney(summary.outflow)}`;
+    elements.cardNetInflow.textContent = `Total inflow (${displayCurrency}): ${formatMoney(summary.inflow)} · Total outflow (${displayCurrency}): ${formatMoney(summary.outflow)}`;
     elements.cardUnresolved.textContent = String(summary.unresolved);
+
+    if (elements.categoryChartTitle) {
+      elements.categoryChartTitle.textContent = `Share by final category (${displayCurrency})`;
+    }
+    if (elements.tagChartTitle) {
+      elements.tagChartTitle.textContent = `Share by tag (${displayCurrency})`;
+    }
+
     const selectedDays = countSelectedCalendarDays(
       app.state.uiPrefs.filters.dateFrom,
       app.state.uiPrefs.filters.dateTo
@@ -26,15 +40,16 @@ export function createChartsUi({
 
     renderChartTagGroupSelector(tagGroups);
 
-    const categoryPie = buildCategoryPieDatasetUAHAbsoluteNet(rows);
-    const tagPie = buildTagGroupPieDatasetUAHAbsoluteNet(
+    const categoryPie = buildCategoryPieDatasetAbsoluteNet(rows, displayCurrency);
+    const tagPie = buildTagGroupPieDatasetAbsoluteNet(
       rows,
       tagGroups,
-      app.state.uiPrefs.selectedTagGroup
+      app.state.uiPrefs.selectedTagGroup,
+      displayCurrency
     );
 
-    renderCategoryPieChart(categoryPie);
-    renderTagPieChart(tagPie);
+    renderCategoryPieChart(categoryPie, displayCurrency);
+    renderTagPieChart(tagPie, displayCurrency);
   }
 
   function renderChartTagGroupSelector(tagGroups) {
@@ -59,7 +74,7 @@ export function createChartsUi({
     elements.chartTagGroupSelect.value = String(selectedGroup);
   }
 
-  function renderCategoryPieChart(data) {
+  function renderCategoryPieChart(data, displayCurrency) {
     if (app.categoryChart) {
       app.categoryChart.destroy();
     }
@@ -69,11 +84,12 @@ export function createChartsUi({
       data,
       'Final category share',
       elements.categoryChartNet,
-      elements.categoryLegendToggle
+      elements.categoryLegendToggle,
+      displayCurrency
     );
   }
 
-  function renderTagPieChart(data) {
+  function renderTagPieChart(data, displayCurrency) {
     if (app.tagChart) {
       app.tagChart.destroy();
     }
@@ -83,11 +99,12 @@ export function createChartsUi({
       data,
       'Tag share',
       elements.tagChartNet,
-      elements.tagLegendToggle
+      elements.tagLegendToggle,
+      displayCurrency
     );
   }
 
-  function buildPieChart(canvas, items, title, netElement, toggleButton) {
+  function buildPieChart(canvas, items, title, netElement, toggleButton, displayCurrency) {
     const hasData = items.length > 0;
     const chartItems = hasData
       ? items
@@ -111,7 +128,7 @@ export function createChartsUi({
         labels: chartItems.map((item) => item.label),
         datasets: [
           {
-            label: `${title} (UAH)`,
+            label: `${title} (${displayCurrency})`,
             data: chartItems.map((item) => item.absoluteNet),
             backgroundColor: palette.background,
             borderColor: palette.border,
@@ -161,7 +178,7 @@ export function createChartsUi({
               clickedChart.setActiveElements([]);
               clickedChart.tooltip.setActiveElements([], { x: 0, y: 0 });
               clickedChart.update();
-              updateChartNetLabel(clickedChart, chartItems, netElement);
+              updateChartNetLabel(clickedChart, chartItems, netElement, displayCurrency);
               syncLegendToggleButtonLabel(clickedChart, chartItems, toggleButton, hasData);
             }
           },
@@ -172,12 +189,12 @@ export function createChartsUi({
               },
               label(context) {
                 if (!hasData) {
-                  return 'No resolved UAH rows for this chart.';
+                  return `No resolved ${displayCurrency} rows for this chart.`;
                 }
 
                 const item = chartItems[context.dataIndex];
                 const signedPrefix = item.signedNet >= 0 ? '+' : '';
-                return `Net UAH: ${signedPrefix}${formatMoney(item.signedNet)} UAH`;
+                return `Net ${displayCurrency}: ${signedPrefix}${formatMoney(item.signedNet)} ${displayCurrency}`;
               },
               afterLabel(context) {
                 if (!hasData) {
@@ -208,17 +225,17 @@ export function createChartsUi({
         chart.setActiveElements([]);
         chart.tooltip.setActiveElements([], { x: 0, y: 0 });
         chart.update();
-        updateChartNetLabel(chart, chartItems, netElement);
+        updateChartNetLabel(chart, chartItems, netElement, displayCurrency);
         syncLegendToggleButtonLabel(chart, chartItems, toggleButton, hasData);
       };
     }
 
-    updateChartNetLabel(chart, chartItems, netElement);
+    updateChartNetLabel(chart, chartItems, netElement, displayCurrency);
     syncLegendToggleButtonLabel(chart, chartItems, toggleButton, hasData);
     return chart;
   }
 
-  function updateChartNetLabel(chart, chartItems, netElement) {
+  function updateChartNetLabel(chart, chartItems, netElement, displayCurrency) {
     if (!netElement) {
       return;
     }
@@ -231,7 +248,7 @@ export function createChartsUi({
     }
 
     const sign = visibleNet > 0 ? '+' : '';
-    netElement.textContent = `Net UAH: ${sign}${formatMoney(visibleNet)}`;
+    netElement.textContent = `Net ${displayCurrency}: ${sign}${formatMoney(visibleNet)}`;
   }
 
   function getVisibleAbsoluteTotal(chart, chartItems) {

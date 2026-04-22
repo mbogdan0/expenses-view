@@ -3,9 +3,13 @@ export {
   STORAGE_KEY,
   SCREEN_DATA,
   SCREEN_CHARTS,
+  SCREEN_FX_RATES,
   SCREEN_DATA_OPS,
   SCREEN_TAGS,
   SCREEN_CATEGORY_MERGE,
+  DISPLAY_CURRENCY_UAH,
+  DISPLAY_CURRENCY_USD,
+  USD_RATE_COVERAGE_DAYS,
   CSV_HEADERS,
   TAG_GROUP_NO_TAG_LABEL,
   TAG_GROUP_INVALID_LABEL
@@ -51,6 +55,10 @@ export {
 export {
   computeEffectiveRow,
   resolveRate,
+  resolveUsdRate,
+  parseManualUsdRatesText,
+  buildUsdCoverageReport,
+  buildUsdCoverageReportForRowsById,
   recomputeDerivedRows,
   normalizeImportedRow,
   mergeImportedRow
@@ -65,9 +73,15 @@ export {
 
 export {
   sortRowsByDateDesc,
+  normalizeDisplayCurrency,
+  getRowConversionForDisplayCurrency,
+  summarizeRowsByDisplayCurrency,
   summarizeUah,
+  buildCategoryPieDatasetAbsoluteNet,
   buildCategoryPieDatasetUAHAbsoluteNet,
+  buildTagPieDatasetAbsoluteNet,
   buildTagPieDatasetUAHAbsoluteNet,
+  buildTagGroupPieDatasetAbsoluteNet,
   buildTagGroupPieDatasetUAHAbsoluteNet,
   buildPiePalette,
   formatMoney,

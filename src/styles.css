@@ -113,6 +113,27 @@ body {
   border-color: rgba(0, 123, 107, 0.16);
 }
 
+.currency-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 123, 107, 0.16);
+  background: rgba(0, 123, 107, 0.07);
+}
+
+.currency-toggle-button {
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+.currency-toggle-button.active {
+  background: linear-gradient(135deg, var(--accent), #00a88f);
+  color: #f5fffc;
+  border-color: transparent;
+}
+
 .screen-nav {
   padding: 8px 10px;
   display: flex;
@@ -179,6 +200,10 @@ body {
   min-width: 0;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .table-panel {
   overflow: hidden;
 }
@@ -235,6 +260,15 @@ body {
   grid-template-columns: repeat(3, minmax(160px, 1fr));
   gap: 10px;
   align-items: end;
+}
+
+.display-currency-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .chart-filters-grid label {
@@ -370,16 +404,16 @@ textarea {
 }
 
 .notes-column {
-  min-width: 320px;
+  min-width: 315px;
 }
 
 .date-column {
-  min-width: 188px;
-  max-width: 188px;
+  min-width: 125px;
+  max-width: 125px;
 }
 
 .uah-column {
-  min-width: 140px;
+  min-width: 120px;
 }
 
 .uah-cell,
@@ -389,7 +423,7 @@ textarea {
 }
 
 .final-category-column {
-  min-width: 280px;
+  min-width: 250px;
 }
 
 .final-category-text {
@@ -403,7 +437,7 @@ textarea {
 }
 
 .tags-column {
-  min-width: 240px;
+  min-width: 230px;
 }
 
 .tags-column.tags-count-0 input {
@@ -536,6 +570,13 @@ textarea {
   color: var(--text-secondary);
 }
 
+.usd-warning-panel {
+  background: rgba(220, 53, 69, 0.14);
+  border: 1px solid rgba(220, 53, 69, 0.45);
+  color: #7f2323;
+  font-weight: 700;
+}
+
 .data-ops-actions {
   margin-top: 12px;
   display: flex;
@@ -557,6 +598,14 @@ textarea {
 
 #categoryMergeTextarea {
   min-height: 180px;
+}
+
+#manualUsdRequiredList {
+  min-height: 140px;
+}
+
+#manualUsdRatesTextarea {
+  min-height: 220px;
 }
 
 .tag-issues-list {

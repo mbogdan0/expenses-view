@@ -13,11 +13,12 @@
 
     <main class="app-shell">
       <nav class="screen-nav" aria-label="Main navigation">
-        <button class="screen-tab active" type="button" data-screen="data">Data</button>
-        <button class="screen-tab" type="button" data-screen="charts">Charts</button>
-        <button class="screen-tab" type="button" data-screen="tags">Tags</button>
-        <button class="screen-tab" type="button" data-screen="category-merge">Category Merge</button>
-        <button class="screen-tab" type="button" data-screen="data-ops">Data Ops</button>
+        <button class="screen-tab active" type="button" data-screen="data">📋 Data</button>
+        <button class="screen-tab" type="button" data-screen="charts">📊 Charts</button>
+        <button class="screen-tab" type="button" data-screen="fx-rates">💱 Rates</button>
+        <button class="screen-tab" type="button" data-screen="tags">🏷️ Tags</button>
+        <button class="screen-tab" type="button" data-screen="category-merge">🧩 Category Merge</button>
+        <button class="screen-tab" type="button" data-screen="data-ops">🛠️ Data Ops</button>
         <div class="screen-nav-brand" aria-label="Expense Viewer">
           <span class="screen-nav-brand-dot" aria-hidden="true"></span>
           <span class="screen-nav-brand-text">Expense Viewer</span>
@@ -60,10 +61,16 @@
           </div>
         </div>
 
+        <div id="dataUsdCoverageWarning" class="panel usd-warning-panel" role="alert"></div>
+
         <div class="panel table-panel">
           <div class="table-header">
             <h2>Merged records</h2>
             <div class="table-header-actions">
+              <div class="currency-toggle" aria-label="Data display currency">
+                <button id="dataDisplayCurrencyUah" type="button" class="btn btn-light currency-toggle-button">UAH</button>
+                <button id="dataDisplayCurrencyUsd" type="button" class="btn btn-light currency-toggle-button">USD</button>
+              </div>
               <p id="tableMeta" class="meta"></p>
               <button id="toggleExtraColumns" type="button" class="btn btn-light">Show extra columns</button>
             </div>
@@ -82,7 +89,7 @@
                 <tr>
                   <th class="select-column"><input id="selectVisibleRows" type="checkbox" aria-label="Select visible rows" /></th>
                   <th class="date-column">Date</th>
-                  <th class="uah-column">UAH</th>
+                  <th id="amountColumnHeader" class="uah-column">UAH</th>
                   <th class="final-category-column">Final Category</th>
                   <th class="tags-column">Tags</th>
                   <th class="extra-column">Price</th>
@@ -115,11 +122,20 @@
             </label>
             <button id="clearChartFilters" type="button" class="btn btn-light">Clear shared dates</button>
           </div>
+          <div class="display-currency-row">
+            <span class="meta">Display currency</span>
+            <div class="currency-toggle" aria-label="Charts display currency">
+              <button id="chartsDisplayCurrencyUah" type="button" class="btn btn-light currency-toggle-button">UAH</button>
+              <button id="chartsDisplayCurrencyUsd" type="button" class="btn btn-light currency-toggle-button">USD</button>
+            </div>
+          </div>
         </div>
+
+        <div id="chartsUsdCoverageWarning" class="panel usd-warning-panel" role="alert"></div>
 
         <div class="cards-grid">
           <article class="summary-card">
-            <h3>Net UAH</h3>
+            <h3 id="cardNetTitle">Net UAH</h3>
             <p id="cardNet" class="metric">0.00</p>
             <p id="cardNetInflow" class="metric-subtle">Total inflow: 0.00 · Total outflow: 0.00</p>
           </article>
@@ -135,7 +151,7 @@
 
         <div class="panel chart-panel">
           <div class="chart-title-row">
-            <h2>Share by final category (UAH)</h2>
+            <h2 id="categoryChartTitle">Share by final category (UAH)</h2>
             <div class="chart-actions">
               <p id="categoryChartNet" class="chart-net">Net UAH: 0.00</p>
               <button id="categoryLegendToggle" type="button" class="btn btn-light chart-legend-toggle">Hide all</button>
@@ -148,7 +164,7 @@
 
         <div class="panel chart-panel">
           <div class="chart-title-row">
-            <h2>Share by tag (UAH)</h2>
+            <h2 id="tagChartTitle">Share by tag (UAH)</h2>
             <div class="chart-actions">
               <select id="chartTagGroupSelect" class="chart-group-select" aria-label="Tag group for share chart">
                 <option value="0">No groups defined</option>
@@ -160,6 +176,37 @@
           <div class="chart-canvas-wrap">
             <canvas id="tagChart"></canvas>
           </div>
+        </div>
+      </section>
+
+      <section id="fxRatesScreen" class="screen" aria-label="USD manual rates screen">
+        <div id="ratesUsdCoverageWarning" class="panel usd-warning-panel" role="alert"></div>
+
+        <div class="panel fx-rates-panel">
+          <h2>Manual USD rates</h2>
+          <p class="data-ops-note">
+            Add rates in strict format, one line per entry:
+            <code>"YYYY-MM-DD";"CUR/USD";"rate"</code>
+          </p>
+          <p class="data-ops-note">
+            Coverage requirement uses fixed windows of 10 days (config constant). Missing checkpoints are shown below.
+          </p>
+          <p class="data-ops-note">
+            Future expense dates do not require future checkpoints: USD conversion uses the latest known manual rate.
+          </p>
+          <label class="tags-editor-label">
+            Required missing rates
+            <textarea id="manualUsdRequiredList" readonly placeholder="All required USD checkpoints are currently covered."></textarea>
+          </label>
+          <label class="tags-editor-label">
+            Manual rates input
+            <textarea id="manualUsdRatesTextarea" placeholder="&quot;2026-04-01&quot;;&quot;UAH/USD&quot;;&quot;43.5000&quot;&#10;&quot;2026-04-01&quot;;&quot;GEL/USD&quot;;&quot;2.7800&quot;"></textarea>
+          </label>
+          <div class="data-ops-actions">
+            <button id="applyManualUsdRatesButton" type="button" class="btn btn-primary">Apply manual rates</button>
+            <p id="manualUsdRatesMeta" class="meta"></p>
+          </div>
+          <ul id="manualUsdRatesIssues" class="tag-issues-list"></ul>
         </div>
       </section>
 

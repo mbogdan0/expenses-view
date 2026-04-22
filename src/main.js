@@ -22,11 +22,13 @@ const elements = {
   screenTabs: Array.from(document.querySelectorAll('.screen-tab')),
   dataScreen: document.getElementById('dataScreen'),
   chartsScreen: document.getElementById('chartsScreen'),
+  fxRatesScreen: document.getElementById('fxRatesScreen'),
   dataOpsScreen: document.getElementById('dataOpsScreen'),
   tagsScreen: document.getElementById('tagsScreen'),
   categoryMergeScreen: document.getElementById('categoryMergeScreen'),
   rowsBody: document.getElementById('rowsBody'),
   tableMeta: document.getElementById('tableMeta'),
+  amountColumnHeader: document.getElementById('amountColumnHeader'),
   recordsTable: document.getElementById('recordsTable'),
   selectVisibleRows: document.getElementById('selectVisibleRows'),
   bulkSelectedCount: document.getElementById('bulkSelectedCount'),
@@ -34,6 +36,10 @@ const elements = {
   bulkAddTagButton: document.getElementById('bulkAddTagButton'),
   bulkRemoveTagButton: document.getElementById('bulkRemoveTagButton'),
   toggleExtraColumns: document.getElementById('toggleExtraColumns'),
+  dataDisplayCurrencyUah: document.getElementById('dataDisplayCurrencyUah'),
+  dataDisplayCurrencyUsd: document.getElementById('dataDisplayCurrencyUsd'),
+  chartsDisplayCurrencyUah: document.getElementById('chartsDisplayCurrencyUah'),
+  chartsDisplayCurrencyUsd: document.getElementById('chartsDisplayCurrencyUsd'),
   filterSearch: document.getElementById('filterSearch'),
   filterTag: document.getElementById('filterTag'),
   filterTagsLt2Only: document.getElementById('filterTagsLt2Only'),
@@ -44,17 +50,28 @@ const elements = {
   chartFilterDateFrom: document.getElementById('chartFilterDateFrom'),
   chartFilterDateTo: document.getElementById('chartFilterDateTo'),
   clearChartFilters: document.getElementById('clearChartFilters'),
+  cardNetTitle: document.getElementById('cardNetTitle'),
   cardNet: document.getElementById('cardNet'),
   cardNetInflow: document.getElementById('cardNetInflow'),
   cardSelectedDays: document.getElementById('cardSelectedDays'),
   cardUnresolved: document.getElementById('cardUnresolved'),
+  categoryChartTitle: document.getElementById('categoryChartTitle'),
   categoryChartNet: document.getElementById('categoryChartNet'),
   categoryLegendToggle: document.getElementById('categoryLegendToggle'),
   chartTagGroupSelect: document.getElementById('chartTagGroupSelect'),
+  tagChartTitle: document.getElementById('tagChartTitle'),
   tagChartNet: document.getElementById('tagChartNet'),
   tagLegendToggle: document.getElementById('tagLegendToggle'),
   categoryChart: document.getElementById('categoryChart'),
   tagChart: document.getElementById('tagChart'),
+  dataUsdCoverageWarning: document.getElementById('dataUsdCoverageWarning'),
+  chartsUsdCoverageWarning: document.getElementById('chartsUsdCoverageWarning'),
+  ratesUsdCoverageWarning: document.getElementById('ratesUsdCoverageWarning'),
+  manualUsdRequiredList: document.getElementById('manualUsdRequiredList'),
+  manualUsdRatesTextarea: document.getElementById('manualUsdRatesTextarea'),
+  applyManualUsdRatesButton: document.getElementById('applyManualUsdRatesButton'),
+  manualUsdRatesMeta: document.getElementById('manualUsdRatesMeta'),
+  manualUsdRatesIssues: document.getElementById('manualUsdRatesIssues'),
   tagGroupsTextarea: document.getElementById('tagGroupsTextarea'),
   applyTagGroupsButton: document.getElementById('applyTagGroupsButton'),
   tagGroupsMeta: document.getElementById('tagGroupsMeta'),
@@ -95,6 +112,8 @@ function setupUiModules() {
     matchesFilter: core.matchesFilter,
     normalizeCurrency: core.normalizeCurrency,
     normalizeTags: core.normalizeTags,
+    normalizeDisplayCurrency: core.normalizeDisplayCurrency,
+    getRowConversionForDisplayCurrency: core.getRowConversionForDisplayCurrency,
     recomputeDerivedRows: core.recomputeDerivedRows,
     sortRowsByDateDesc: core.sortRowsByDateDesc,
     validateRowTagsAgainstGroups: core.validateRowTagsAgainstGroups,
@@ -111,10 +130,11 @@ function setupUiModules() {
     app,
     elements,
     formatMoney: core.formatMoney,
-    summarizeUah: core.summarizeUah,
+    normalizeDisplayCurrency: core.normalizeDisplayCurrency,
+    summarizeRowsByDisplayCurrency: core.summarizeRowsByDisplayCurrency,
     countSelectedCalendarDays: core.countSelectedCalendarDays,
-    buildCategoryPieDatasetUAHAbsoluteNet: core.buildCategoryPieDatasetUAHAbsoluteNet,
-    buildTagGroupPieDatasetUAHAbsoluteNet: core.buildTagGroupPieDatasetUAHAbsoluteNet,
+    buildCategoryPieDatasetAbsoluteNet: core.buildCategoryPieDatasetAbsoluteNet,
+    buildTagGroupPieDatasetAbsoluteNet: core.buildTagGroupPieDatasetAbsoluteNet,
     buildPiePalette: core.buildPiePalette,
     normalizeTagGroupIndex: core.normalizeTagGroupIndex,
     buildTagGroupPreviewLabel: (...args) => tableUi.buildTagGroupPreviewLabel(...args),
@@ -138,6 +158,8 @@ function setupUiModules() {
     saveState,
     render,
     hydrateFilterInputs,
+    hydrateManualUsdRatesInputs,
+    hydrateDisplayCurrencyButtons,
     applyScreen
   });
 }
@@ -147,6 +169,8 @@ function init() {
   hydrateFilterInputs();
   hydrateTagGroupsInputs();
   hydrateCategoryMergeInputs();
+  hydrateManualUsdRatesInputs();
+  hydrateDisplayCurrencyButtons();
   applyScreen(app.state.uiPrefs.activeScreen || core.SCREEN_DATA);
   render();
 }
@@ -182,6 +206,11 @@ function bindEvents() {
       render();
     });
   });
+
+  bindDisplayCurrencyButton(elements.dataDisplayCurrencyUah, core.DISPLAY_CURRENCY_UAH);
+  bindDisplayCurrencyButton(elements.dataDisplayCurrencyUsd, core.DISPLAY_CURRENCY_USD);
+  bindDisplayCurrencyButton(elements.chartsDisplayCurrencyUah, core.DISPLAY_CURRENCY_UAH);
+  bindDisplayCurrencyButton(elements.chartsDisplayCurrencyUsd, core.DISPLAY_CURRENCY_USD);
 
   bindFilterInput(elements.filterSearch, 'search');
   bindFilterInput(elements.filterTag, 'tag');
@@ -242,8 +271,24 @@ function bindEvents() {
   elements.applyCategoryMergeButton?.addEventListener('click', () => {
     applyCategoryMergeFromTextarea();
   });
+  elements.applyManualUsdRatesButton?.addEventListener('click', () => {
+    applyManualUsdRatesFromTextarea();
+  });
 
   elements.rowsBody.addEventListener('change', tableUi.onRowsBodyChange);
+}
+
+function bindDisplayCurrencyButton(button, displayCurrency) {
+  if (!button) {
+    return;
+  }
+
+  button.addEventListener('click', () => {
+    app.state.uiPrefs.displayCurrency = core.normalizeDisplayCurrency(displayCurrency);
+    hydrateDisplayCurrencyButtons();
+    saveState();
+    render();
+  });
 }
 
 function bindFilterInput(element, key) {
@@ -322,9 +367,31 @@ function hydrateCategoryMergeInputs() {
   }
 }
 
+function hydrateManualUsdRatesInputs() {
+  if (elements.manualUsdRatesTextarea) {
+    elements.manualUsdRatesTextarea.value = app.state.manualUsdRatesText || '';
+  }
+}
+
+function hydrateDisplayCurrencyButtons() {
+  const displayCurrency = core.normalizeDisplayCurrency(app.state.uiPrefs.displayCurrency);
+  app.state.uiPrefs.displayCurrency = displayCurrency;
+
+  const uahActive = displayCurrency === core.DISPLAY_CURRENCY_UAH;
+  const usdActive = displayCurrency === core.DISPLAY_CURRENCY_USD;
+
+  [elements.dataDisplayCurrencyUah, elements.chartsDisplayCurrencyUah]
+    .filter(Boolean)
+    .forEach((button) => button.classList.toggle('active', uahActive));
+  [elements.dataDisplayCurrencyUsd, elements.chartsDisplayCurrencyUsd]
+    .filter(Boolean)
+    .forEach((button) => button.classList.toggle('active', usdActive));
+}
+
 function normalizeScreenName(screenName) {
   if (
     screenName === core.SCREEN_CHARTS ||
+    screenName === core.SCREEN_FX_RATES ||
     screenName === core.SCREEN_DATA_OPS ||
     screenName === core.SCREEN_TAGS ||
     screenName === core.SCREEN_CATEGORY_MERGE
@@ -343,6 +410,7 @@ function applyScreen(screenName) {
 
   elements.dataScreen.classList.toggle('active', selected === core.SCREEN_DATA);
   elements.chartsScreen.classList.toggle('active', selected === core.SCREEN_CHARTS);
+  elements.fxRatesScreen.classList.toggle('active', selected === core.SCREEN_FX_RATES);
   elements.dataOpsScreen.classList.toggle('active', selected === core.SCREEN_DATA_OPS);
   elements.tagsScreen.classList.toggle('active', selected === core.SCREEN_TAGS);
   elements.categoryMergeScreen.classList.toggle('active', selected === core.SCREEN_CATEGORY_MERGE);
@@ -360,7 +428,8 @@ function applyTagGroupsFromTextarea() {
   app.state.rowsById = core.recomputeDerivedRows(
     app.state.rowsById,
     app.state.tagGroupsText,
-    app.state.categoryMergeRulesText
+    app.state.categoryMergeRulesText,
+    app.state.manualUsdRatesText
   );
 
   if (parsed.isValid) {
@@ -395,7 +464,8 @@ function applyCategoryMergeFromTextarea() {
   app.state.rowsById = core.recomputeDerivedRows(
     app.state.rowsById,
     app.state.tagGroupsText,
-    app.state.categoryMergeRulesText
+    app.state.categoryMergeRulesText,
+    app.state.manualUsdRatesText
   );
 
   const runtime = core.buildCategoryMergeRuntime(
@@ -411,6 +481,26 @@ function applyCategoryMergeFromTextarea() {
     saveState(`Category merge rules applied with ${issuesCount} issue(s).`);
   }
 
+  render();
+}
+
+function applyManualUsdRatesFromTextarea() {
+  const nextText = elements.manualUsdRatesTextarea?.value || '';
+  app.state.manualUsdRatesText = nextText;
+  app.state.rowsById = core.recomputeDerivedRows(
+    app.state.rowsById,
+    app.state.tagGroupsText,
+    app.state.categoryMergeRulesText,
+    app.state.manualUsdRatesText
+  );
+
+  const coverageModel = buildUsdCoverageModel();
+  const parseIssuesCount = coverageModel.parsedRates.issues.length;
+  const missingCount = coverageModel.missingRequests.length;
+
+  saveState(
+    `Manual USD rates applied: ${coverageModel.parsedRates.entries.length} valid line(s), ${parseIssuesCount} parse issue(s), ${missingCount} missing checkpoint(s).`
+  );
   render();
 }
 
@@ -466,11 +556,68 @@ function getChartRows() {
   });
 }
 
+function buildUsdCoverageModel() {
+  return core.buildUsdCoverageReportForRowsById(
+    app.state.rowsById,
+    app.state.manualUsdRatesText,
+    core.USD_RATE_COVERAGE_DAYS
+  );
+}
+
+function setCoverageWarning(element, isVisible, message) {
+  if (!element) {
+    return;
+  }
+
+  element.classList.toggle('hidden', !isVisible);
+  element.textContent = isVisible ? message : '';
+}
+
+function renderUsdCoverageWarnings(coverageModel) {
+  const hasRequirements = coverageModel.requiredPairs.length > 0;
+  const shouldWarn = hasRequirements && !coverageModel.isComplete;
+  const affectedPairs = new Set(coverageModel.missingRequests.map((request) => request.pair)).size;
+  const warningText = shouldWarn
+    ? `USD coverage is incomplete: missing ${coverageModel.missingRequests.length} checkpoint(s) across ${affectedPairs} pair(s). USD conversions may be inaccurate.`
+    : '';
+
+  setCoverageWarning(elements.dataUsdCoverageWarning, shouldWarn, warningText);
+  setCoverageWarning(elements.chartsUsdCoverageWarning, shouldWarn, warningText);
+  setCoverageWarning(elements.ratesUsdCoverageWarning, shouldWarn, warningText);
+}
+
+function renderManualUsdRatesPanel(coverageModel) {
+  if (elements.manualUsdRequiredList) {
+    elements.manualUsdRequiredList.value =
+      coverageModel.missingRequestsText || 'All required USD checkpoints are currently covered.';
+  }
+
+  if (elements.manualUsdRatesMeta) {
+    const pairCount = coverageModel.requiredPairs.length;
+    elements.manualUsdRatesMeta.textContent = `${coverageModel.parsedRates.entries.length} valid rate line(s) · ${coverageModel.parsedRates.issues.length} parse issue(s) · ${coverageModel.missingRequests.length} missing checkpoint(s) · ${pairCount} required pair(s)`;
+  }
+
+  if (elements.manualUsdRatesIssues) {
+    if (!coverageModel.parsedRates.issues.length) {
+      elements.manualUsdRatesIssues.innerHTML = '';
+      return;
+    }
+
+    elements.manualUsdRatesIssues.innerHTML = coverageModel.parsedRates.issues
+      .map((issue) => `<li>${escapeHtml(issue.message)}</li>`)
+      .join('');
+  }
+}
+
 function render() {
   const tableRows = tableUi.getVisibleRows();
   const chartRows = getChartRows();
   const tagGroups = core.parseTagGroupsText(app.state.tagGroupsText);
   const categoryMerge = core.parseCategoryMergeRulesText(app.state.categoryMergeRulesText);
+  const displayCurrency = core.normalizeDisplayCurrency(app.state.uiPrefs.displayCurrency);
+  const usdCoverageModel = buildUsdCoverageModel();
+
+  app.state.uiPrefs.displayCurrency = displayCurrency;
   app.state.uiPrefs.selectedTagGroup = core.normalizeTagGroupIndex(
     app.state.uiPrefs.selectedTagGroup,
     tagGroups.groups.length
@@ -478,13 +625,16 @@ function render() {
   tableUi.syncSelectionWithVisibleRows(tableRows);
   app.currentRows = tableRows;
 
+  hydrateDisplayCurrencyButtons();
   tableUi.renderDataTable(tableRows);
   tableUi.renderBulkTagControls(tableRows, tagGroups);
   tableUi.renderTagGroupsPanel(tagGroups);
   renderCategoryMergePanel(categoryMerge);
+  renderManualUsdRatesPanel(usdCoverageModel);
+  renderUsdCoverageWarnings(usdCoverageModel);
   tableUi.applyExtraColumnsVisibility();
   if ((app.state.uiPrefs.activeScreen || core.SCREEN_DATA) === core.SCREEN_CHARTS) {
-    chartsUi.renderCharts(chartRows, tagGroups);
+    chartsUi.renderCharts(chartRows, tagGroups, displayCurrency);
   }
 }
 
@@ -517,7 +667,8 @@ window.debugExpenseApp = {
     app.state.rowsById = core.recomputeDerivedRows(
       app.state.rowsById,
       app.state.tagGroupsText,
-      app.state.categoryMergeRulesText
+      app.state.categoryMergeRulesText,
+      app.state.manualUsdRatesText
     );
     render();
   },
@@ -534,7 +685,9 @@ window.debugExpenseApp = {
         sourceFullCategory: effective.originalSourceFullCategory,
         tags: effective.tags,
         uahAmount: row.derived?.uahAmount,
-        unresolved: row.derived?.unresolved
+        usdAmount: row.derived?.usdAmount,
+        unresolvedUah: row.derived?.unresolved,
+        unresolvedUsd: row.derived?.usdUnresolved
       };
     });
   }

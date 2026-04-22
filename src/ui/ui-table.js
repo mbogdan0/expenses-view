@@ -8,6 +8,8 @@ export function createTableUi({
   matchesFilter,
   normalizeCurrency,
   normalizeTags,
+  normalizeDisplayCurrency,
+  getRowConversionForDisplayCurrency,
   recomputeDerivedRows,
   sortRowsByDateDesc,
   validateRowTagsAgainstGroups,
@@ -37,6 +39,34 @@ export function createTableUi({
     onRowInputChange(event);
   }
 
+  function getDateInputParts(value) {
+    const normalized = formatDateInputValue(value);
+    if (!normalized) {
+      return { datePart: '', timePart: '', titleValue: '' };
+    }
+
+    const [datePart = '', timePart = ''] = normalized.split('T');
+    const hasTime = /^\d{2}:\d{2}$/.test(timePart);
+
+    return {
+      datePart,
+      timePart: hasTime ? timePart : '',
+      titleValue: hasTime ? `${datePart} ${timePart}` : datePart
+    };
+  }
+
+  function buildUpdatedDateValue(rowId, selectedDate) {
+    const nextDate = String(selectedDate || '').trim();
+    if (!nextDate) {
+      return '';
+    }
+
+    const row = app.state.rowsById?.[rowId];
+    const effectiveDate = row ? computeEffectiveRow(row.source, row.overrides).date : '';
+    const { timePart } = getDateInputParts(effectiveDate);
+    return timePart ? `${nextDate} ${timePart}` : nextDate;
+  }
+
   function onRowInputChange(event) {
     const target = event.target;
     const rowElement = target.closest('tr[data-row-id]');
@@ -53,7 +83,7 @@ export function createTableUi({
 
     let nextValue = target.value;
     if (field === 'date') {
-      nextValue = nextValue ? nextValue.replace('T', ' ') : '';
+      nextValue = buildUpdatedDateValue(rowId, nextValue);
     }
     if (field === 'currency') {
       nextValue = normalizeCurrency(nextValue);
@@ -114,7 +144,8 @@ export function createTableUi({
       app.state.rowsById = recomputeDerivedRows(
         result.rowsById,
         app.state.tagGroupsText,
-        app.state.categoryMergeRulesText
+        app.state.categoryMergeRulesText,
+        app.state.manualUsdRatesText
       );
       saveState(formatBulkMutationStatus(result.stats));
       render();
@@ -193,7 +224,8 @@ export function createTableUi({
     app.state.rowsById = recomputeDerivedRows(
       app.state.rowsById,
       app.state.tagGroupsText,
-      app.state.categoryMergeRulesText
+      app.state.categoryMergeRulesText,
+      app.state.manualUsdRatesText
     );
     saveState();
     render();
@@ -201,7 +233,24 @@ export function createTableUi({
 
   function getVisibleRows() {
     const records = Object.values(app.state.rowsById || {});
-    const filtered = records.filter((record) => matchesFilter(record, app.state.uiPrefs.filters));
+    const filters = app.state.uiPrefs.filters || {};
+    const baseFilters = {
+      ...filters,
+      status: 'all'
+    };
+    const displayCurrency = normalizeDisplayCurrency(app.state.uiPrefs.displayCurrency);
+    const status = filters.status || 'all';
+
+    const filtered = records
+      .filter((record) => matchesFilter(record, baseFilters))
+      .filter((record) => {
+        if (status === 'all') {
+          return true;
+        }
+
+        const unresolved = Boolean(getRowConversionForDisplayCurrency(record, displayCurrency).unresolved);
+        return status === 'resolved' ? !unresolved : unresolved;
+      });
     return sortRowsByDateDesc(filtered);
   }
 
@@ -294,6 +343,12 @@ export function createTableUi({
   }
 
   function renderDataTable(rows) {
+    const displayCurrency = normalizeDisplayCurrency(app.state.uiPrefs.displayCurrency);
+
+    if (elements.amountColumnHeader) {
+      elements.amountColumnHeader.textContent = displayCurrency;
+    }
+
     if (!rows.length) {
       elements.rowsBody.innerHTML =
         '<tr><td colspan="13" style="text-align:center; padding: 24px; color: #4e6166;">No rows found for current filters.</td></tr>';
@@ -305,7 +360,8 @@ export function createTableUi({
     const html = rows
       .map((record) => {
         const effective = computeEffectiveRow(record.source, record.overrides);
-        const unresolved = Boolean(record.derived?.unresolved);
+        const conversion = getRowConversionForDisplayCurrency(record, displayCurrency);
+        const unresolved = Boolean(conversion.unresolved);
         const displayCategory = record.derived?.finalFullCategory || effective.fullCategory;
         const categoryMergeStatus = record.derived?.categoryMergeStatus || 'none';
         const finalCategoryClass =
@@ -315,15 +371,16 @@ export function createTableUi({
           : [];
         const tagCount = effective.tags.length;
         const tagCountClass = tagCount === 0 ? 'tags-count-0' : tagCount === 1 ? 'tags-count-1' : 'tags-count-2plus';
-        const uahDisplay = unresolved ? '—' : formatMoney(record.derived?.uahAmount || 0);
+        const amountDisplay = unresolved ? '—' : formatMoney(conversion.amount || 0);
         const rateSource = unresolved
-          ? record.derived?.warning || 'Missing rate'
-          : record.derived?.rateSource || '—';
+          ? conversion.warning || 'Missing rate'
+          : conversion.rateSource || '—';
+        const dateInputParts = getDateInputParts(effective.date);
 
         return `<tr data-row-id="${escapeHtml(record.id)}" class="${unresolved ? 'unresolved-row' : ''}">
         <td class="select-column"><input data-row-select="${escapeAttribute(record.id)}" type="checkbox" ${app.selectedRowIds.has(record.id) ? 'checked' : ''} /></td>
-        <td class="date-column"><input data-field="date" type="datetime-local" value="${escapeAttribute(formatDateInputValue(effective.date))}" /></td>
-        <td class="uah-cell uah-column">${escapeHtml(uahDisplay)}</td>
+        <td class="date-column"><input data-field="date" type="date" value="${escapeAttribute(dateInputParts.datePart)}" title="${escapeAttribute(dateInputParts.titleValue)}" /></td>
+        <td class="uah-cell uah-column">${escapeHtml(amountDisplay)}</td>
         <td class="final-category-column final-category-text ${finalCategoryClass}">${formatFinalCategoryHtml(displayCategory)}</td>
         <td class="tags-column ${tagCountClass}">
           <input data-field="tags" type="text" value="${escapeAttribute(formatTagsInput(effective.tags))}" placeholder="tag1, tag2" />
@@ -343,9 +400,11 @@ export function createTableUi({
 
     elements.rowsBody.innerHTML = html;
 
-    const unresolvedCount = rows.filter((row) => row.derived?.unresolved).length;
+    const unresolvedCount = rows.filter((row) =>
+      getRowConversionForDisplayCurrency(row, displayCurrency).unresolved
+    ).length;
     const invalidTagsCount = rows.filter((row) => !row.derived?.tagValidation?.isValid).length;
-    elements.tableMeta.textContent = `${rows.length} rows shown · ${Object.keys(app.state.rowsById).length} rows total · ${unresolvedCount} unresolved · ${invalidTagsCount} invalid tags`;
+    elements.tableMeta.textContent = `${rows.length} rows shown · ${Object.keys(app.state.rowsById).length} rows total · ${unresolvedCount} unresolved (${displayCurrency}) · ${invalidTagsCount} invalid tags`;
     updateSelectionUi(rows);
   }
 
