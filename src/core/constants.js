@@ -4,6 +4,7 @@ export const SCREEN_DATA = 'data';
 export const SCREEN_CHARTS = 'charts';
 export const SCREEN_DATA_OPS = 'data-ops';
 export const SCREEN_TAGS = 'tags';
+export const SCREEN_CATEGORY_MERGE = 'category-merge';
 
 export const CSV_HEADERS = [
   'Date',
@@ -16,7 +17,13 @@ export const CSV_HEADERS = [
   'Image'
 ];
 
-export const supportedScreens = new Set([SCREEN_DATA, SCREEN_CHARTS, SCREEN_DATA_OPS, SCREEN_TAGS]);
+export const supportedScreens = new Set([
+  SCREEN_DATA,
+  SCREEN_CHARTS,
+  SCREEN_DATA_OPS,
+  SCREEN_TAGS,
+  SCREEN_CATEGORY_MERGE
+]);
 export const supportedFilterStatus = new Set(['all', 'resolved', 'unresolved']);
 
 export const TAG_GROUP_NO_TAG_LABEL = 'No tag in group';

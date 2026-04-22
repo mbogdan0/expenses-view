@@ -12,21 +12,16 @@
     <div class="page-bg" aria-hidden="true"></div>
 
     <main class="app-shell">
-      <header class="hero">
-        <div>
-          <p class="eyebrow">Single File Tool</p>
-          <h1>Expense Consolidator</h1>
-          <p class="hero-subtitle">
-            Import many CSV files, merge with stable deduplication, keep manual edits, and review UAH totals.
-          </p>
-        </div>
-      </header>
-
       <nav class="screen-nav" aria-label="Main navigation">
         <button class="screen-tab active" type="button" data-screen="data">Data</button>
         <button class="screen-tab" type="button" data-screen="charts">Charts</button>
         <button class="screen-tab" type="button" data-screen="tags">Tags</button>
+        <button class="screen-tab" type="button" data-screen="category-merge">Category Merge</button>
         <button class="screen-tab" type="button" data-screen="data-ops">Data Ops</button>
+        <div class="screen-nav-brand" aria-label="Expense Viewer">
+          <span class="screen-nav-brand-dot" aria-hidden="true"></span>
+          <span class="screen-nav-brand-text">Expense Viewer</span>
+        </div>
       </nav>
 
       <section id="dataScreen" class="screen active" aria-label="Data screen">
@@ -184,6 +179,29 @@
             <p id="tagGroupsMeta" class="meta"></p>
           </div>
           <ul id="tagGroupsIssues" class="tag-issues-list"></ul>
+        </div>
+      </section>
+
+      <section id="categoryMergeScreen" class="screen" aria-label="Category merge screen">
+        <div class="panel category-merge-panel">
+          <h2>Final Category merge rules</h2>
+          <p class="data-ops-note">
+            One line is one merge rule in semicolon CSV format:
+            <code>"Master category";"Child category A";"Child category B"</code>
+          </p>
+          <p class="data-ops-note">
+            Child categories merge into the master category in table, filters, and charts. If a master category is
+            missing, child categories stay visible and are highlighted in red.
+          </p>
+          <label class="tags-editor-label">
+            Rules
+            <textarea id="categoryMergeTextarea" placeholder="&quot;🌿 Bogdan / Shop and household&quot;;&quot;🌙 Yulia / Shop and household&quot;;&quot;🌙 Yulia / Shop and household test&quot;"></textarea>
+          </label>
+          <div class="data-ops-actions">
+            <button id="applyCategoryMergeButton" type="button" class="btn btn-primary">Apply merge rules</button>
+            <p id="categoryMergeMeta" class="meta"></p>
+          </div>
+          <ul id="categoryMergeIssues" class="tag-issues-list"></ul>
         </div>
       </section>
 

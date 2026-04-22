@@ -57,47 +57,12 @@ body {
   gap: 18px;
 }
 
-.hero,
 .panel,
 .screen-nav {
   background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: 16px;
   box-shadow: var(--shadow);
-}
-
-.hero {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  padding: 24px;
-  align-items: center;
-}
-
-.eyebrow {
-  margin: 0;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  font-size: 12px;
-  color: var(--accent-strong);
-}
-
-h1 {
-  margin: 6px 0 10px;
-  font-size: clamp(1.6rem, 2.4vw, 2.3rem);
-}
-
-.hero-subtitle {
-  margin: 0;
-  color: var(--text-secondary);
-  max-width: 760px;
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 .file-picker {
@@ -149,12 +114,15 @@ h1 {
 }
 
 .screen-nav {
-  padding: 8px;
+  padding: 8px 10px;
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .screen-tab {
+  flex: 0 0 auto;
   border: 0;
   background: transparent;
   border-radius: 10px;
@@ -167,6 +135,33 @@ h1 {
 .screen-tab.active {
   background: rgba(0, 123, 107, 0.14);
   color: var(--accent-strong);
+}
+
+.screen-nav-brand {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 123, 107, 0.24);
+  background: rgba(0, 123, 107, 0.08);
+  color: var(--accent-strong);
+  white-space: nowrap;
+}
+
+.screen-nav-brand-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #00a88f, var(--accent-strong));
+  box-shadow: 0 0 0 2px rgba(0, 123, 107, 0.18);
+}
+
+.screen-nav-brand-text {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
 }
 
 .screen {
@@ -192,7 +187,8 @@ h1 {
 .table-panel h2,
 .chart-panel h2,
 .data-ops-panel h2,
-.tags-panel h2 {
+.tags-panel h2,
+.category-merge-panel h2 {
   margin: 0 0 12px;
   font-size: 1.05rem;
 }
@@ -402,6 +398,10 @@ textarea {
   word-break: break-word;
 }
 
+.final-category-missing-master {
+  color: #8c1f1f;
+}
+
 .tags-column {
   min-width: 240px;
 }
@@ -555,6 +555,10 @@ textarea {
   min-height: 180px;
 }
 
+#categoryMergeTextarea {
+  min-height: 180px;
+}
+
 .tag-issues-list {
   margin: 12px 0 0;
   padding-left: 18px;
@@ -564,14 +568,6 @@ textarea {
 }
 
 @media (max-width: 1080px) {
-  .hero {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-actions {
-    justify-content: flex-start;
-  }
-
   .filters-grid {
     grid-template-columns: repeat(2, minmax(130px, 1fr));
   }
@@ -591,11 +587,15 @@ textarea {
     margin: 14px auto 24px;
   }
 
-  .hero,
   .panel,
   .status-row,
   .screen-nav {
     border-radius: 12px;
+  }
+
+  .screen-nav-brand {
+    margin-left: auto;
+    max-width: 100%;
   }
 
   .filters-grid {

@@ -5,6 +5,7 @@ export {
   SCREEN_CHARTS,
   SCREEN_DATA_OPS,
   SCREEN_TAGS,
+  SCREEN_CATEGORY_MERGE,
   CSV_HEADERS,
   TAG_GROUP_NO_TAG_LABEL,
   TAG_GROUP_INVALID_LABEL
@@ -39,6 +40,13 @@ export {
   parseCsvText,
   parseExpenseCsv
 } from './core/csv-and-identity.js';
+
+export {
+  parseCategoryMergeRulesText,
+  ensureCategoryMergeModel,
+  buildCategoryMergeRuntime,
+  ensureCategoryMergeRuntime
+} from './core/category-merge.js';
 
 export {
   computeEffectiveRow,

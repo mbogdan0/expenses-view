@@ -61,6 +61,7 @@ function createTableHarness(rows) {
     state: {
       rowsById,
       tagGroupsText: '',
+      categoryMergeRulesText: '',
       uiPrefs: {
         filters: {}
       }
@@ -248,4 +249,22 @@ test('syncSelectionWithVisibleRows drops hidden selections and counter follows',
   assert.deepEqual(Array.from(app.selectedRowIds).sort(), ['r1', 'r3']);
   assert.equal(elements.bulkSelectedCount.textContent, '2 selected');
   assert.equal(elements.bulkAddTagButton.disabled, false);
+});
+
+test('renderDataTable highlights final category when merge master is missing', () => {
+  const row = createRow('r1');
+  row.derived.finalFullCategory = 'Child / Missing';
+  row.derived.categoryMergeStatus = 'master_missing';
+
+  const { elements, tableUi } = createTableHarness([row]);
+  tableUi.renderDataTable([row]);
+
+  assert.equal(
+    elements.rowsBody.innerHTML.includes('final-category-missing-master'),
+    true
+  );
+  assert.equal(
+    elements.rowsBody.innerHTML.includes('Child / Missing'),
+    true
+  );
 });

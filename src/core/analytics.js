@@ -51,7 +51,8 @@ export function buildCategoryPieDatasetUAHAbsoluteNet(rows) {
     }
 
     const effective = computeEffectiveRow(row.source, row.overrides);
-    const category = effective.fullCategory || 'Uncategorized';
+    const category =
+      row.derived?.finalFullCategory || effective.fullCategory || 'Uncategorized';
     totals.set(category, (totals.get(category) || 0) + amount);
   }
 
@@ -224,6 +225,8 @@ export function normalizeFilterDate(value, boundary = 'start') {
 
 export function matchesFilter(record, filters) {
   const effective = computeEffectiveRow(record.source, record.overrides);
+  const displayedCategory = record.derived?.finalFullCategory || effective.fullCategory;
+  const baseCategory = record.derived?.baseFullCategory || effective.baseFullCategory || effective.fullCategory;
   const search = sanitizeText(filters.search).toLowerCase();
   const tagFilter = sanitizeText(filters.tag).toLowerCase();
   const fromEpoch = normalizeFilterDate(filters.dateFrom, 'start');
@@ -232,7 +235,8 @@ export function matchesFilter(record, filters) {
   const tagsText = effective.tags.join(' ');
 
   const haystack = [
-    effective.fullCategory,
+    displayedCategory,
+    baseCategory,
     effective.originalCategory,
     effective.originalSourceFullCategory,
     effective.notes,

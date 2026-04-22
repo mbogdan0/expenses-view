@@ -111,7 +111,11 @@ export function createTableUi({
     );
 
     if (result.stats.updated > 0) {
-      app.state.rowsById = recomputeDerivedRows(result.rowsById, app.state.tagGroupsText);
+      app.state.rowsById = recomputeDerivedRows(
+        result.rowsById,
+        app.state.tagGroupsText,
+        app.state.categoryMergeRulesText
+      );
       saveState(formatBulkMutationStatus(result.stats));
       render();
       return;
@@ -186,7 +190,11 @@ export function createTableUi({
   }
 
   function finalizeRowUpdate() {
-    app.state.rowsById = recomputeDerivedRows(app.state.rowsById, app.state.tagGroupsText);
+    app.state.rowsById = recomputeDerivedRows(
+      app.state.rowsById,
+      app.state.tagGroupsText,
+      app.state.categoryMergeRulesText
+    );
     saveState();
     render();
   }
@@ -298,6 +306,10 @@ export function createTableUi({
       .map((record) => {
         const effective = computeEffectiveRow(record.source, record.overrides);
         const unresolved = Boolean(record.derived?.unresolved);
+        const displayCategory = record.derived?.finalFullCategory || effective.fullCategory;
+        const categoryMergeStatus = record.derived?.categoryMergeStatus || 'none';
+        const finalCategoryClass =
+          categoryMergeStatus === 'master_missing' ? 'final-category-missing-master' : '';
         const tagErrors = Array.isArray(record.derived?.tagValidation?.errors)
           ? record.derived.tagValidation.errors
           : [];
@@ -312,7 +324,7 @@ export function createTableUi({
         <td class="select-column"><input data-row-select="${escapeAttribute(record.id)}" type="checkbox" ${app.selectedRowIds.has(record.id) ? 'checked' : ''} /></td>
         <td class="date-column"><input data-field="date" type="datetime-local" value="${escapeAttribute(formatDateInputValue(effective.date))}" /></td>
         <td class="uah-cell uah-column">${escapeHtml(uahDisplay)}</td>
-        <td class="final-category-column final-category-text">${formatFinalCategoryHtml(effective.fullCategory)}</td>
+        <td class="final-category-column final-category-text ${finalCategoryClass}">${formatFinalCategoryHtml(displayCategory)}</td>
         <td class="tags-column ${tagCountClass}">
           <input data-field="tags" type="text" value="${escapeAttribute(formatTagsInput(effective.tags))}" placeholder="tag1, tag2" />
           ${tagErrors.length ? `<div class="cell-error">${escapeHtml(tagErrors.join(' | '))}</div>` : ''}

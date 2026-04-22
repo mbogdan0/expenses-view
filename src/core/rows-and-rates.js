@@ -10,6 +10,10 @@ import {
   buildSourceFullCategory,
   fileNameToMainCategory
 } from './csv-and-identity.js';
+import {
+  applyCategoryMergeToEffectiveRow,
+  buildCategoryMergeRuntime
+} from './category-merge.js';
 import { ensureTagGroupsModel, validateRowTagsAgainstGroups } from './tag-groups.js';
 
 function hasOwn(object, key) {
@@ -23,24 +27,33 @@ function pickEditableField(source, overrides, fieldName) {
   return source[fieldName];
 }
 
-export function computeEffectiveRow(source, overrides = {}) {
-  const fullCategory = pickEditableField(source, overrides, 'fullCategory') || source.sourceFullCategory;
+export function computeEffectiveRow(source, overrides = {}, categoryMergeRuntime = null) {
+  const baseFullCategory = pickEditableField(source, overrides, 'fullCategory') || source.sourceFullCategory;
   const tags = normalizeTags(pickEditableField(source, overrides, 'tags'));
 
-  return {
+  const baseRow = {
     id: source.id,
     originalCategory: source.category || '',
     originalSourceFullCategory: source.sourceFullCategory || '',
     date: pickEditableField(source, overrides, 'date') || '',
-    fullCategory,
+    fullCategory: baseFullCategory,
+    baseFullCategory,
     price: pickEditableField(source, overrides, 'price') || '',
     currency: normalizeCurrency(pickEditableField(source, overrides, 'currency') || ''),
     rate: pickEditableField(source, overrides, 'rate') || '',
     rateType: pickEditableField(source, overrides, 'rateType') || '',
     notes: pickEditableField(source, overrides, 'notes') || '',
     image: pickEditableField(source, overrides, 'image') || '',
-    tags
+    tags,
+    categoryMergeStatus: 'none',
+    categoryMergeMaster: null
   };
+
+  if (!categoryMergeRuntime) {
+    return baseRow;
+  }
+
+  return applyCategoryMergeToEffectiveRow(baseRow, categoryMergeRuntime);
 }
 
 function buildRateCandidates(rows) {
@@ -137,10 +150,19 @@ export function resolveRate(row, allRows) {
   };
 }
 
-export function recomputeDerivedRows(rowsById, tagGroupsInput = '') {
+export function recomputeDerivedRows(rowsById, tagGroupsInput = '', categoryMergeInput = '') {
   const records = Object.values(rowsById || {});
-  const effectiveRows = records.map((record) => computeEffectiveRow(record.source, record.overrides));
+  const baseEffectiveRows = records.map((record) => computeEffectiveRow(record.source, record.overrides));
   const tagGroupsModel = ensureTagGroupsModel(tagGroupsInput);
+  const availableBaseCategories = new Set(
+    baseEffectiveRows
+      .map((row) => row.baseFullCategory || row.fullCategory)
+      .filter(Boolean)
+  );
+  const categoryMergeRuntime = buildCategoryMergeRuntime(categoryMergeInput, availableBaseCategories);
+  const effectiveRows = baseEffectiveRows.map((row) =>
+    applyCategoryMergeToEffectiveRow(row, categoryMergeRuntime)
+  );
 
   const effectiveById = new Map(effectiveRows.map((row) => [row.id, row]));
   const nextRowsById = {};
@@ -161,6 +183,10 @@ export function recomputeDerivedRows(rowsById, tagGroupsInput = '') {
         rateSource: conversion.rateSource ?? null,
         uahAmount: conversion.uahAmount ?? null,
         effectiveDateEpoch: effectiveDate ? effectiveDate.getTime() : null,
+        baseFullCategory: effective.baseFullCategory || effective.fullCategory || '',
+        finalFullCategory: effective.fullCategory || '',
+        categoryMergeStatus: effective.categoryMergeStatus || 'none',
+        categoryMergeMaster: effective.categoryMergeMaster || null,
         tagValidation: {
           isValid: tagValidation.isValid,
           unknownTags: tagValidation.unknownTags,

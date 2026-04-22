@@ -60,7 +60,11 @@ export function createImportExportUi({
         registerImportHistory(file, fingerprint, parsedRows);
       }
 
-      app.state.rowsById = recomputeDerivedRows(app.state.rowsById, app.state.tagGroupsText);
+      app.state.rowsById = recomputeDerivedRows(
+        app.state.rowsById,
+        app.state.tagGroupsText,
+        app.state.categoryMergeRulesText
+      );
       saveState(
         `Imported ${files.length} file(s): ${totalRows} rows parsed, ${added} added, ${updated} deduplicated.`
       );

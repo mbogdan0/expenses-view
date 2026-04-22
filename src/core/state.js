@@ -16,6 +16,7 @@ export function createEmptyState() {
   return {
     version: STORAGE_VERSION,
     tagGroupsText: '',
+    categoryMergeRulesText: '',
     rowsById: {},
     importHistory: [],
     uiPrefs: {
@@ -50,6 +51,10 @@ export function validateStateSnapshot(snapshot) {
 
   if (typeof snapshot.tagGroupsText !== 'string') {
     return 'Snapshot tagGroupsText must be a string.';
+  }
+
+  if (hasOwn(snapshot, 'categoryMergeRulesText') && typeof snapshot.categoryMergeRulesText !== 'string') {
+    return 'Snapshot categoryMergeRulesText must be a string when provided.';
   }
 
   for (const [rowId, record] of Object.entries(snapshot.rowsById)) {
@@ -204,6 +209,10 @@ export function sanitizeLoadedState(maybeState) {
   const maybeUiPrefs = isPlainObject(maybeState.uiPrefs) ? maybeState.uiPrefs : {};
   const maybeFilters = isPlainObject(maybeUiPrefs.filters) ? maybeUiPrefs.filters : {};
   const tagGroupsText = typeof maybeState.tagGroupsText === 'string' ? maybeState.tagGroupsText : base.tagGroupsText;
+  const categoryMergeRulesText =
+    typeof maybeState.categoryMergeRulesText === 'string'
+      ? maybeState.categoryMergeRulesText
+      : base.categoryMergeRulesText;
   const parsedTagGroups = parseTagGroupsText(tagGroupsText);
 
   const state = {
@@ -211,6 +220,7 @@ export function sanitizeLoadedState(maybeState) {
     ...maybeState,
     version: STORAGE_VERSION,
     tagGroupsText,
+    categoryMergeRulesText,
     rowsById,
     importHistory,
     uiPrefs: {
@@ -234,6 +244,10 @@ export function sanitizeLoadedState(maybeState) {
     updatedAt: sanitizeText(maybeState.updatedAt) || base.updatedAt
   };
 
-  state.rowsById = recomputeDerivedRows(state.rowsById, state.tagGroupsText);
+  state.rowsById = recomputeDerivedRows(
+    state.rowsById,
+    state.tagGroupsText,
+    state.categoryMergeRulesText
+  );
   return state;
 }

@@ -4,6 +4,7 @@ import * as core from '../src/core.js';
 
 const EXPECTED_EXPORTS = [
   'CSV_HEADERS',
+  'SCREEN_CATEGORY_MERGE',
   'SCREEN_CHARTS',
   'SCREEN_DATA',
   'SCREEN_DATA_OPS',
@@ -13,6 +14,7 @@ const EXPECTED_EXPORTS = [
   'TAG_GROUP_INVALID_LABEL',
   'TAG_GROUP_NO_TAG_LABEL',
   'applyBulkTagMutation',
+  'buildCategoryMergeRuntime',
   'buildCategoryPieDatasetUAHAbsoluteNet',
   'buildDedupId',
   'buildFileFingerprint',
@@ -24,6 +26,8 @@ const EXPECTED_EXPORTS = [
   'countSelectedCalendarDays',
   'createEmptyState',
   'displayDateTime',
+  'ensureCategoryMergeModel',
+  'ensureCategoryMergeRuntime',
   'fileNameToMainCategory',
   'formatDateInputValue',
   'formatLocalDateTime',
@@ -39,6 +43,7 @@ const EXPECTED_EXPORTS = [
   'normalizeNumericString',
   'normalizeTagGroupIndex',
   'normalizeTags',
+  'parseCategoryMergeRulesText',
   'parseCsvText',
   'parseExpenseCsv',
   'parseLocalDateTime',

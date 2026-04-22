@@ -24,6 +24,7 @@ const elements = {
   chartsScreen: document.getElementById('chartsScreen'),
   dataOpsScreen: document.getElementById('dataOpsScreen'),
   tagsScreen: document.getElementById('tagsScreen'),
+  categoryMergeScreen: document.getElementById('categoryMergeScreen'),
   rowsBody: document.getElementById('rowsBody'),
   tableMeta: document.getElementById('tableMeta'),
   recordsTable: document.getElementById('recordsTable'),
@@ -57,7 +58,11 @@ const elements = {
   tagGroupsTextarea: document.getElementById('tagGroupsTextarea'),
   applyTagGroupsButton: document.getElementById('applyTagGroupsButton'),
   tagGroupsMeta: document.getElementById('tagGroupsMeta'),
-  tagGroupsIssues: document.getElementById('tagGroupsIssues')
+  tagGroupsIssues: document.getElementById('tagGroupsIssues'),
+  categoryMergeTextarea: document.getElementById('categoryMergeTextarea'),
+  applyCategoryMergeButton: document.getElementById('applyCategoryMergeButton'),
+  categoryMergeMeta: document.getElementById('categoryMergeMeta'),
+  categoryMergeIssues: document.getElementById('categoryMergeIssues')
 };
 
 const app = {
@@ -141,6 +146,7 @@ function init() {
   bindEvents();
   hydrateFilterInputs();
   hydrateTagGroupsInputs();
+  hydrateCategoryMergeInputs();
   applyScreen(app.state.uiPrefs.activeScreen || core.SCREEN_DATA);
   render();
 }
@@ -233,6 +239,9 @@ function bindEvents() {
   elements.applyTagGroupsButton?.addEventListener('click', () => {
     applyTagGroupsFromTextarea();
   });
+  elements.applyCategoryMergeButton?.addEventListener('click', () => {
+    applyCategoryMergeFromTextarea();
+  });
 
   elements.rowsBody.addEventListener('change', tableUi.onRowsBodyChange);
 }
@@ -307,11 +316,18 @@ function hydrateTagGroupsInputs() {
   }
 }
 
+function hydrateCategoryMergeInputs() {
+  if (elements.categoryMergeTextarea) {
+    elements.categoryMergeTextarea.value = app.state.categoryMergeRulesText || '';
+  }
+}
+
 function normalizeScreenName(screenName) {
   if (
     screenName === core.SCREEN_CHARTS ||
     screenName === core.SCREEN_DATA_OPS ||
-    screenName === core.SCREEN_TAGS
+    screenName === core.SCREEN_TAGS ||
+    screenName === core.SCREEN_CATEGORY_MERGE
   ) {
     return screenName;
   }
@@ -329,6 +345,7 @@ function applyScreen(screenName) {
   elements.chartsScreen.classList.toggle('active', selected === core.SCREEN_CHARTS);
   elements.dataOpsScreen.classList.toggle('active', selected === core.SCREEN_DATA_OPS);
   elements.tagsScreen.classList.toggle('active', selected === core.SCREEN_TAGS);
+  elements.categoryMergeScreen.classList.toggle('active', selected === core.SCREEN_CATEGORY_MERGE);
 }
 
 function applyTagGroupsFromTextarea() {
@@ -340,7 +357,11 @@ function applyTagGroupsFromTextarea() {
     app.state.uiPrefs.selectedTagGroup,
     parsed.groups.length
   );
-  app.state.rowsById = core.recomputeDerivedRows(app.state.rowsById, app.state.tagGroupsText);
+  app.state.rowsById = core.recomputeDerivedRows(
+    app.state.rowsById,
+    app.state.tagGroupsText,
+    app.state.categoryMergeRulesText
+  );
 
   if (parsed.isValid) {
     saveState(`Tag groups applied: ${parsed.groups.length} group(s), ${parsed.allTags.length} tags.`);
@@ -349,6 +370,79 @@ function applyTagGroupsFromTextarea() {
   }
 
   render();
+}
+
+function collectBaseFinalCategories(rowsById) {
+  const categories = new Set();
+
+  for (const record of Object.values(rowsById || {})) {
+    const effective = core.computeEffectiveRow(record.source, record.overrides);
+    const category = (effective.baseFullCategory || effective.fullCategory || '').trim();
+    if (!category) {
+      continue;
+    }
+    categories.add(category);
+  }
+
+  return categories;
+}
+
+function applyCategoryMergeFromTextarea() {
+  const nextText = elements.categoryMergeTextarea?.value || '';
+  app.state.categoryMergeRulesText = nextText;
+
+  const parsed = core.parseCategoryMergeRulesText(nextText);
+  app.state.rowsById = core.recomputeDerivedRows(
+    app.state.rowsById,
+    app.state.tagGroupsText,
+    app.state.categoryMergeRulesText
+  );
+
+  const runtime = core.buildCategoryMergeRuntime(
+    parsed,
+    collectBaseFinalCategories(app.state.rowsById)
+  );
+  const issuesCount = parsed.issues.length + runtime.missingMasters.length;
+  if (issuesCount === 0) {
+    saveState(
+      `Category merge rules applied: ${parsed.rules.length} rule(s), ${parsed.appliedMappingsCount} mapping(s).`
+    );
+  } else {
+    saveState(`Category merge rules applied with ${issuesCount} issue(s).`);
+  }
+
+  render();
+}
+
+function renderCategoryMergePanel(categoryMergeModel) {
+  const runtime = core.buildCategoryMergeRuntime(
+    categoryMergeModel,
+    collectBaseFinalCategories(app.state.rowsById)
+  );
+  const parseIssueCount = categoryMergeModel.issues.length;
+  const missingMasterCount = runtime.missingMasters.length;
+  const totalIssues = parseIssueCount + missingMasterCount;
+
+  if (elements.categoryMergeMeta) {
+    const validity = totalIssues === 0 ? 'valid' : 'with issues';
+    elements.categoryMergeMeta.textContent = `${categoryMergeModel.rules.length} rules · ${categoryMergeModel.appliedMappingsCount} mappings · ${runtime.activeChildToMaster.size} active mappings · ${missingMasterCount} missing master categories · ${validity}`;
+  }
+
+  if (elements.categoryMergeIssues) {
+    const issueMessages = [
+      ...categoryMergeModel.issues.map((issue) => issue.message),
+      ...runtime.missingMasters.map((missing) => missing.message)
+    ];
+
+    if (!issueMessages.length) {
+      elements.categoryMergeIssues.innerHTML = '';
+      return;
+    }
+
+    elements.categoryMergeIssues.innerHTML = issueMessages
+      .map((message) => `<li>${escapeHtml(message)}</li>`)
+      .join('');
+  }
 }
 
 function getChartRows() {
@@ -376,6 +470,7 @@ function render() {
   const tableRows = tableUi.getVisibleRows();
   const chartRows = getChartRows();
   const tagGroups = core.parseTagGroupsText(app.state.tagGroupsText);
+  const categoryMerge = core.parseCategoryMergeRulesText(app.state.categoryMergeRulesText);
   app.state.uiPrefs.selectedTagGroup = core.normalizeTagGroupIndex(
     app.state.uiPrefs.selectedTagGroup,
     tagGroups.groups.length
@@ -386,6 +481,7 @@ function render() {
   tableUi.renderDataTable(tableRows);
   tableUi.renderBulkTagControls(tableRows, tagGroups);
   tableUi.renderTagGroupsPanel(tagGroups);
+  renderCategoryMergePanel(categoryMerge);
   tableUi.applyExtraColumnsVisibility();
   if ((app.state.uiPrefs.activeScreen || core.SCREEN_DATA) === core.SCREEN_CHARTS) {
     chartsUi.renderCharts(chartRows, tagGroups);
@@ -418,7 +514,11 @@ window.debugExpenseApp = {
     return app.state;
   },
   recompute() {
-    app.state.rowsById = core.recomputeDerivedRows(app.state.rowsById, app.state.tagGroupsText);
+    app.state.rowsById = core.recomputeDerivedRows(
+      app.state.rowsById,
+      app.state.tagGroupsText,
+      app.state.categoryMergeRulesText
+    );
     render();
   },
   showVisibleRows() {
@@ -427,7 +527,9 @@ window.debugExpenseApp = {
       return {
         id: row.id,
         date: core.displayDateTime(effective.date),
-        finalCategory: effective.fullCategory,
+        finalCategory: row.derived?.finalFullCategory || effective.fullCategory,
+        baseFinalCategory: row.derived?.baseFullCategory || effective.baseFullCategory,
+        categoryMergeStatus: row.derived?.categoryMergeStatus || 'none',
         sourceCategory: effective.originalCategory,
         sourceFullCategory: effective.originalSourceFullCategory,
         tags: effective.tags,

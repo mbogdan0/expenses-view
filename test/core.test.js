@@ -17,6 +17,7 @@ import {
   normalizeTagGroupIndex,
   normalizeImportedRow,
   normalizeTags,
+  parseCategoryMergeRulesText,
   parseExpenseCsv,
   parseTagGroupsText,
   parseStateSnapshotJson,
@@ -213,6 +214,88 @@ test('buildCategoryPieDatasetUAHAbsoluteNet uses absolute weight from signed net
   ]);
 });
 
+test('recomputeDerivedRows applies category merge rules and flags missing masters', () => {
+  const rowsById = {
+    master: {
+      id: 'master',
+      source: {
+        id: 'master',
+        date: '2026-04-01 11:00',
+        category: 'Cat',
+        sourceFullCategory: 'Master / Bucket',
+        price: '-100',
+        currency: 'UAH',
+        rate: '',
+        rateType: '',
+        notes: '',
+        image: '',
+        tags: []
+      },
+      overrides: {},
+      derived: {}
+    },
+    child: {
+      id: 'child',
+      source: {
+        id: 'child',
+        date: '2026-04-01 12:00',
+        category: 'Cat',
+        sourceFullCategory: 'Child / Bucket',
+        price: '-50',
+        currency: 'UAH',
+        rate: '',
+        rateType: '',
+        notes: '',
+        image: '',
+        tags: []
+      },
+      overrides: {},
+      derived: {}
+    },
+    missing: {
+      id: 'missing',
+      source: {
+        id: 'missing',
+        date: '2026-04-01 13:00',
+        category: 'Cat',
+        sourceFullCategory: 'Child / Missing',
+        price: '-40',
+        currency: 'UAH',
+        rate: '',
+        rateType: '',
+        notes: '',
+        image: '',
+        tags: []
+      },
+      overrides: {},
+      derived: {}
+    }
+  };
+
+  const nextRowsById = recomputeDerivedRows(
+    rowsById,
+    '',
+    '"Master / Bucket";"Child / Bucket"\n"Absent / Master";"Child / Missing"'
+  );
+
+  assert.equal(nextRowsById.master.derived.finalFullCategory, 'Master / Bucket');
+  assert.equal(nextRowsById.master.derived.categoryMergeStatus, 'none');
+  assert.equal(nextRowsById.child.derived.baseFullCategory, 'Child / Bucket');
+  assert.equal(nextRowsById.child.derived.finalFullCategory, 'Master / Bucket');
+  assert.equal(nextRowsById.child.derived.categoryMergeStatus, 'merged');
+  assert.equal(nextRowsById.child.derived.categoryMergeMaster, 'Master / Bucket');
+  assert.equal(nextRowsById.missing.derived.baseFullCategory, 'Child / Missing');
+  assert.equal(nextRowsById.missing.derived.finalFullCategory, 'Child / Missing');
+  assert.equal(nextRowsById.missing.derived.categoryMergeStatus, 'master_missing');
+  assert.equal(nextRowsById.missing.derived.categoryMergeMaster, 'Absent / Master');
+
+  const categoryPie = buildCategoryPieDatasetUAHAbsoluteNet(Object.values(nextRowsById));
+  assert.deepEqual(categoryPie, [
+    { label: 'Master / Bucket', signedNet: -150, absoluteNet: 150 },
+    { label: 'Child / Missing', signedNet: -40, absoluteNet: 40 }
+  ]);
+});
+
 test('buildTagPieDatasetUAHAbsoluteNet assigns full amount to each tag', () => {
   const rows = [
     {
@@ -273,6 +356,27 @@ test('parseTagGroupsText reports invalid lines without separator or without name
   assert.equal(parsed.issues.length, 2);
   assert.equal(parsed.issues[0].type, 'invalid_group_format');
   assert.equal(parsed.issues[1].type, 'missing_group_name');
+});
+
+test('parseCategoryMergeRulesText parses quoted semicolon CSV and reports conflicts', () => {
+  const parsed = parseCategoryMergeRulesText(
+    '"Master / One";"Child / A";"Child / B"\n' +
+      '"Master / Two";"Child / B";"Child / C"\n' +
+      '"Broken line"'
+  );
+
+  assert.equal(parsed.rules.length, 2);
+  assert.equal(parsed.rules[0].master, 'Master / One');
+  assert.deepEqual(parsed.rules[0].effectiveChildren, ['Child / A', 'Child / B']);
+  assert.equal(parsed.rules[1].master, 'Master / Two');
+  assert.deepEqual(parsed.rules[1].effectiveChildren, ['Child / C']);
+  assert.equal(parsed.childToMaster.get('Child / A'), 'Master / One');
+  assert.equal(parsed.childToMaster.get('Child / B'), 'Master / One');
+  assert.equal(parsed.childToMaster.get('Child / C'), 'Master / Two');
+  assert.equal(parsed.appliedMappingsCount, 3);
+  assert.equal(parsed.isValid, false);
+  assert.equal(parsed.issues.some((issue) => issue.type === 'child_conflict'), true);
+  assert.equal(parsed.issues.some((issue) => issue.type === 'missing_children'), true);
 });
 
 test('validateRowTagsAgainstGroups catches unknown tags and same-group conflicts', () => {
@@ -457,6 +561,55 @@ test('matchesFilter finds rows by any tag in a multi-tag row', () => {
   );
 });
 
+test('matchesFilter can find both merged and base final categories', () => {
+  const record = {
+    source: {
+      id: 'a',
+      date: '2026-04-01 11:00',
+      category: 'Original',
+      sourceFullCategory: 'Child / Bucket',
+      price: '-100',
+      currency: 'UAH',
+      rate: '',
+      rateType: '',
+      notes: 'Weekly shopping',
+      image: '',
+      tags: []
+    },
+    overrides: {},
+    derived: {
+      unresolved: false,
+      effectiveDateEpoch: 1711962000000,
+      baseFullCategory: 'Child / Bucket',
+      finalFullCategory: 'Master / Bucket'
+    }
+  };
+
+  assert.equal(
+    matchesFilter(record, {
+      search: 'master / bucket',
+      tag: '',
+      tagsLt2Only: false,
+      dateFrom: '',
+      dateTo: '',
+      status: 'all'
+    }),
+    true
+  );
+
+  assert.equal(
+    matchesFilter(record, {
+      search: 'child / bucket',
+      tag: '',
+      tagsLt2Only: false,
+      dateFrom: '',
+      dateTo: '',
+      status: 'all'
+    }),
+    true
+  );
+});
+
 test('matchesFilter supports <2 tags toggle for table filtering', () => {
   const record = {
     source: {
@@ -597,6 +750,7 @@ test('sanitizeLoadedState resets unsupported versions to empty state', () => {
   assert.deepEqual(migrated.rowsById, emptyState.rowsById);
   assert.deepEqual(migrated.importHistory, emptyState.importHistory);
   assert.equal(migrated.tagGroupsText, '');
+  assert.equal(migrated.categoryMergeRulesText, '');
   assert.equal(migrated.uiPrefs.activeScreen, emptyState.uiPrefs.activeScreen);
   assert.equal(migrated.uiPrefs.filters.status, emptyState.uiPrefs.filters.status);
   assert.equal(migrated.uiPrefs.filters.search, emptyState.uiPrefs.filters.search);
@@ -635,6 +789,15 @@ test('parseStateSnapshotJson accepts valid current snapshot', () => {
   assert.equal(parsed.ok, true);
   assert.equal(parsed.state.version, STORAGE_VERSION);
   assert.equal(parsed.state.uiPrefs.activeScreen, 'data-ops');
+});
+
+test('parseStateSnapshotJson accepts snapshot without categoryMergeRulesText', () => {
+  const snapshot = createEmptyState();
+  delete snapshot.categoryMergeRulesText;
+
+  const parsed = parseStateSnapshotJson(JSON.stringify(snapshot));
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.state.categoryMergeRulesText, '');
 });
 
 test('parseStateSnapshotJson rejects invalid JSON', () => {
