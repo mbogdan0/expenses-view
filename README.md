@@ -1,32 +1,32 @@
-# Expense Single-HTML Consolidator
+# Expense Export Parser
 
-A local-first browser app that imports multiple expense CSV files, deduplicates rows by immutable source identity, preserves manual edits in `localStorage`, and visualizes totals in UAH.
+Parser and local-first consolidator for CSV exports produced by [Expenses & Spending Tracker](https://apps.apple.com/us/app/expenses-spending-tracker/id1492055171).
 
-## Features
+## What It Does
 
-- Multi-file CSV import (`Date,Category,Price,Currency,Rate,Rate Type,Notes,Image`)
-- Stable dedup key: `sourceDate + sourceFullCategory + sourcePrice`
-- `sourceFullCategory = <filename_without_ext> / <category_from_row>`
-- Manual inline editing for row fields and comma-separated multi-tags
-- Re-import safety: manual edits survive repeated imports
-- UAH conversion with nearest-date same-currency rate fallback
-- Red-highlight unresolved rows (excluded from UAH totals/charts)
-- Optional source/rate columns can be toggled on demand
-- Three screens: Data, Charts, and Data Ops
-- Data Ops includes CSV import, DB JSON export, and DB JSON import with overwrite confirmation
-- Single self-contained HTML output (works with `file://` and HTTP server)
+- Imports multiple CSV files and merges records with stable deduplication.
+- Preserves manual edits and tags in local storage.
+- Converts to UAH, highlights unresolved rows, and shows category/tag charts.
+- Produces a single self-contained HTML app.
 
-## Scripts
+## Quick Start
 
-- `npm install`
-- `npm run dev` - local server with rebuild-on-change
-- `npm run build` - outputs `dist/expense-consolidator.html`
-- `npm test` - deterministic core logic tests
+```bash
+npm install
+npm run build
+npm run dev
+npm test
+```
 
-## Output
-
-The build artifact is:
+## Build Output
 
 - `dist/expense-consolidator.html`
 
-Open it directly or serve it over HTTP.
+## GitHub Pages
+
+- After enabling Pages in the repository, the app is published from GitHub Actions.
+- Site URL pattern: `https://<owner>.github.io/<repository>/`
+
+## Disclaimer
+
+This project is not affiliated with or endorsed by the developer of Expenses & Spending Tracker.
