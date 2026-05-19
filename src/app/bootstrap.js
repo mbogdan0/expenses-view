@@ -5,6 +5,7 @@ import {
   hydrateDisplayCurrencyButtons,
   hydrateFilterInputs,
   hydrateManualUsdRatesInputs,
+  hydrateMonthlyInputs,
   hydrateTagGroupsInputs
 } from './hydration.js';
 import { createRenderPipeline } from './render-pipeline.js';
@@ -17,6 +18,9 @@ export function createAppRuntime({
   core,
   createChartsUi,
   createImportExportUi,
+  createMonthlyUi = () => ({
+    renderMonthly() {}
+  }),
   createTableUi,
   escapeAttribute,
   escapeHtml,
@@ -37,12 +41,15 @@ export function createAppRuntime({
     }),
     categoryChart: null,
     tagChart: null,
+    monthlyTotalsChart: null,
+    monthlyTagChart: null,
     currentRows: [],
     selectedRowIds: new Set()
   };
 
   let tableUi;
   let chartsUi;
+  let monthlyUi;
   let importExportUi;
   let renderPipeline;
 
@@ -81,6 +88,10 @@ export function createAppRuntime({
 
   function hydrateDisplayCurrencyButtonsRuntime() {
     hydrateDisplayCurrencyButtons(app, elements, core);
+  }
+
+  function hydrateMonthlyInputsRuntime() {
+    hydrateMonthlyInputs(app, elements, core);
   }
 
   function normalizeScreenNameRuntime(screenName) {
@@ -133,6 +144,25 @@ export function createAppRuntime({
       normalizeTagGroupIndex: core.normalizeTagGroupIndex,
       buildTagGroupPreviewLabel: (...args) => tableUi.buildTagGroupPreviewLabel(...args),
       escapeHtml
+    });
+
+    monthlyUi = createMonthlyUi({
+      app,
+      elements,
+      formatMoney: core.formatMoney,
+      summarizeRowsByDisplayCurrency: core.summarizeRowsByDisplayCurrency,
+      normalizeTagGroupIndex: core.normalizeTagGroupIndex,
+      normalizeMonthKey: core.normalizeMonthKey,
+      normalizeMonthlyBoundaryDay: core.normalizeMonthlyBoundaryDay,
+      buildTagGroupPieDatasetAbsoluteNet: core.buildTagGroupPieDatasetAbsoluteNet,
+      buildMonthlyNetUsdSeries: core.buildMonthlyNetUsdSeries,
+      filterRowsByMonthlyCycleKey: core.filterRowsByMonthlyCycleKey,
+      describeMonthlyCycle: core.describeMonthlyCycle,
+      buildPiePalette: core.buildPiePalette,
+      buildTagGroupPreviewLabel: (...args) => tableUi.buildTagGroupPreviewLabel(...args),
+      escapeHtml,
+      saveState,
+      render
     });
 
     importExportUi = createImportExportUi({
@@ -192,6 +222,7 @@ export function createAppRuntime({
     core,
     tableUi,
     chartsUi,
+    monthlyUi,
     hydrateDisplayCurrencyButtons: hydrateDisplayCurrencyButtonsRuntime,
     renderCategoryMergePanel: categoryMergeFeature.renderCategoryMergePanel,
     renderManualUsdRatesPanel: usdRatesFeature.renderManualUsdRatesPanel,
@@ -209,6 +240,7 @@ export function createAppRuntime({
       saveState,
       render,
       hydrateFilterInputs: hydrateFilterInputsRuntime,
+      hydrateMonthlyInputs: hydrateMonthlyInputsRuntime,
       hydrateDisplayCurrencyButtons: hydrateDisplayCurrencyButtonsRuntime,
       applyScreen: applyScreenRuntime,
       normalizeScreenName: normalizeScreenNameRuntime,
@@ -225,6 +257,7 @@ export function createAppRuntime({
     hydrateTagGroupsInputsRuntime();
     hydrateCategoryMergeInputsRuntime();
     hydrateManualUsdRatesInputsRuntime();
+    hydrateMonthlyInputsRuntime();
     hydrateDisplayCurrencyButtonsRuntime();
     applyScreenRuntime(app.state.uiPrefs.activeScreen || core.SCREEN_DATA);
     render();

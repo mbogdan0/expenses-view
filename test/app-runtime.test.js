@@ -35,11 +35,13 @@ function createDocumentStub() {
   const screenTabs = [
     createElementStub(),
     createElementStub(),
+    createElementStub(),
     createElementStub()
   ];
   screenTabs[0].dataset.screen = core.SCREEN_DATA;
   screenTabs[1].dataset.screen = core.SCREEN_CHARTS;
-  screenTabs[2].dataset.screen = core.SCREEN_FX_RATES;
+  screenTabs[2].dataset.screen = core.SCREEN_BY_MONTHS;
+  screenTabs[3].dataset.screen = core.SCREEN_FX_RATES;
 
   return {
     getElementById(id) {
@@ -111,6 +113,10 @@ test('app runtime init + screen switch + render does not throw', () => {
 
   assert.doesNotThrow(() => {
     documentRef.screenTabs[1].trigger('click');
+  });
+
+  assert.doesNotThrow(() => {
+    documentRef.screenTabs[2].trigger('click');
   });
 
   assert.doesNotThrow(() => {

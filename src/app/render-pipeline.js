@@ -4,6 +4,7 @@ export function createRenderPipeline({
   core,
   tableUi,
   chartsUi,
+  monthlyUi,
   hydrateDisplayCurrencyButtons,
   renderCategoryMergePanel,
   renderManualUsdRatesPanel,
@@ -57,6 +58,9 @@ export function createRenderPipeline({
     tableUi.applyExtraColumnsVisibility();
     if ((app.state.uiPrefs.activeScreen || core.SCREEN_DATA) === core.SCREEN_CHARTS) {
       chartsUi.renderCharts(chartRows, tagGroups, displayCurrency);
+    }
+    if ((app.state.uiPrefs.activeScreen || core.SCREEN_DATA) === core.SCREEN_BY_MONTHS) {
+      monthlyUi.renderMonthly(Object.values(app.state.rowsById || {}), tagGroups);
     }
   }
 

@@ -44,3 +44,17 @@ export function hydrateDisplayCurrencyButtons(app, elements, core) {
     .filter(Boolean)
     .forEach((button) => button.classList.toggle('active', usdActive));
 }
+
+export function hydrateMonthlyInputs(app, elements, core) {
+  const monthly = app.state.uiPrefs?.monthly || {};
+
+  if (elements.monthlyBoundaryDayInput) {
+    elements.monthlyBoundaryDayInput.value = String(core.normalizeMonthlyBoundaryDay(monthly.boundaryDay));
+  }
+  if (elements.monthlyRangeFrom) {
+    elements.monthlyRangeFrom.value = core.normalizeMonthKey(monthly.rangeFrom);
+  }
+  if (elements.monthlyRangeTo) {
+    elements.monthlyRangeTo.value = core.normalizeMonthKey(monthly.rangeTo);
+  }
+}

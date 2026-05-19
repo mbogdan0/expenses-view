@@ -1,6 +1,7 @@
 export function normalizeScreenName(core, screenName) {
   if (
     screenName === core.SCREEN_CHARTS ||
+    screenName === core.SCREEN_BY_MONTHS ||
     screenName === core.SCREEN_FX_RATES ||
     screenName === core.SCREEN_DATA_OPS ||
     screenName === core.SCREEN_TAGS ||
@@ -20,6 +21,7 @@ export function applyScreen(elements, core, screenName) {
 
   elements.dataScreen.classList.toggle('active', selected === core.SCREEN_DATA);
   elements.chartsScreen.classList.toggle('active', selected === core.SCREEN_CHARTS);
+  elements.byMonthsScreen.classList.toggle('active', selected === core.SCREEN_BY_MONTHS);
   elements.fxRatesScreen.classList.toggle('active', selected === core.SCREEN_FX_RATES);
   elements.dataOpsScreen.classList.toggle('active', selected === core.SCREEN_DATA_OPS);
   elements.tagsScreen.classList.toggle('active', selected === core.SCREEN_TAGS);

@@ -6,12 +6,23 @@ import {
   supportedFilterStatus,
   supportedScreens
 } from './constants.js';
+import { normalizeMonthKey, normalizeMonthlyBoundaryDay } from './analytics.js';
 import { isPlainObject, normalizeTags, parseLocalDateTime, sanitizeText } from './primitives.js';
 import { normalizeTagGroupIndex, parseTagGroupsText } from './tag-groups.js';
 import { recomputeDerivedRows } from './rows-and-rates.js';
 
 function normalizeActiveScreen(screenName) {
   return supportedScreens.has(screenName) ? screenName : SCREEN_DATA;
+}
+
+function createDefaultMonthlyPrefs() {
+  return {
+    boundaryDay: 21,
+    rangeFrom: '',
+    rangeTo: '',
+    selectedMonthKey: '',
+    selectedMonthlyTagGroup: 0
+  };
 }
 
 export function createEmptyState() {
@@ -34,7 +45,8 @@ export function createEmptyState() {
         dateFrom: '',
         dateTo: '',
         status: 'all'
-      }
+      },
+      monthly: createDefaultMonthlyPrefs()
     },
     updatedAt: new Date().toISOString()
   };
@@ -136,6 +148,32 @@ export function validateStateSnapshot(snapshot) {
     return 'Snapshot uiPrefs.filters.status is invalid.';
   }
 
+  if (hasOwn(snapshot.uiPrefs, 'monthly')) {
+    if (!isPlainObject(snapshot.uiPrefs.monthly)) {
+      return 'Snapshot uiPrefs.monthly must be an object when provided.';
+    }
+
+    const monthly = snapshot.uiPrefs.monthly;
+    if (hasOwn(monthly, 'boundaryDay') && !Number.isInteger(monthly.boundaryDay)) {
+      return 'Snapshot uiPrefs.monthly.boundaryDay must be an integer when provided.';
+    }
+    if (hasOwn(monthly, 'rangeFrom') && typeof monthly.rangeFrom !== 'string') {
+      return 'Snapshot uiPrefs.monthly.rangeFrom must be a string when provided.';
+    }
+    if (hasOwn(monthly, 'rangeTo') && typeof monthly.rangeTo !== 'string') {
+      return 'Snapshot uiPrefs.monthly.rangeTo must be a string when provided.';
+    }
+    if (hasOwn(monthly, 'selectedMonthKey') && typeof monthly.selectedMonthKey !== 'string') {
+      return 'Snapshot uiPrefs.monthly.selectedMonthKey must be a string when provided.';
+    }
+    if (
+      hasOwn(monthly, 'selectedMonthlyTagGroup') &&
+      (!Number.isInteger(monthly.selectedMonthlyTagGroup) || monthly.selectedMonthlyTagGroup < 0)
+    ) {
+      return 'Snapshot uiPrefs.monthly.selectedMonthlyTagGroup must be a non-negative integer when provided.';
+    }
+  }
+
   if (typeof snapshot.updatedAt !== 'string' || !snapshot.updatedAt.trim()) {
     return 'Snapshot updatedAt must be a non-empty string.';
   }
@@ -223,6 +261,7 @@ export function sanitizeLoadedState(maybeState) {
   const importHistory = Array.isArray(maybeState.importHistory) ? maybeState.importHistory : [];
   const maybeUiPrefs = isPlainObject(maybeState.uiPrefs) ? maybeState.uiPrefs : {};
   const maybeFilters = isPlainObject(maybeUiPrefs.filters) ? maybeUiPrefs.filters : {};
+  const maybeMonthly = isPlainObject(maybeUiPrefs.monthly) ? maybeUiPrefs.monthly : {};
   const tagGroupsText = typeof maybeState.tagGroupsText === 'string' ? maybeState.tagGroupsText : base.tagGroupsText;
   const categoryMergeRulesText =
     typeof maybeState.categoryMergeRulesText === 'string'
@@ -262,6 +301,17 @@ export function sanitizeLoadedState(maybeState) {
         status: supportedFilterStatus.has(maybeFilters.status)
           ? maybeFilters.status
           : base.uiPrefs.filters.status
+      },
+      monthly: {
+        ...createDefaultMonthlyPrefs(),
+        boundaryDay: normalizeMonthlyBoundaryDay(maybeMonthly.boundaryDay),
+        rangeFrom: normalizeMonthKey(maybeMonthly.rangeFrom),
+        rangeTo: normalizeMonthKey(maybeMonthly.rangeTo),
+        selectedMonthKey: normalizeMonthKey(maybeMonthly.selectedMonthKey),
+        selectedMonthlyTagGroup: normalizeTagGroupIndex(
+          maybeMonthly.selectedMonthlyTagGroup,
+          parsedTagGroups.groups.length
+        )
       }
     },
     updatedAt: sanitizeText(maybeState.updatedAt) || base.updatedAt

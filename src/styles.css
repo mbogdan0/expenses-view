@@ -223,6 +223,11 @@ body {
   font-size: 1.05rem;
 }
 
+.monthly-filters-panel h2 {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+}
+
 .filters-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(140px, 1fr));
@@ -262,6 +267,13 @@ body {
   align-items: end;
 }
 
+.monthly-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
 .display-currency-row {
   margin-top: 12px;
   display: flex;
@@ -272,6 +284,13 @@ body {
 }
 
 .chart-filters-grid label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.monthly-filters-grid label {
   display: grid;
   gap: 6px;
   font-size: 0.85rem;
@@ -565,6 +584,11 @@ textarea {
   display: block;
 }
 
+.monthly-bar-chart-wrap {
+  height: 420px;
+  max-height: 420px;
+}
+
 .data-ops-note {
   margin: 0;
   color: var(--text-secondary);
@@ -625,6 +649,10 @@ textarea {
     grid-template-columns: repeat(2, minmax(140px, 1fr));
   }
 
+  .monthly-filters-grid {
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+
   .cards-grid {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
   }
@@ -652,6 +680,10 @@ textarea {
   }
 
   .chart-filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .monthly-filters-grid {
     grid-template-columns: 1fr;
   }
 

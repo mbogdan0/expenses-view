@@ -3,6 +3,7 @@ export {
   STORAGE_KEY,
   SCREEN_DATA,
   SCREEN_CHARTS,
+  SCREEN_BY_MONTHS,
   SCREEN_FX_RATES,
   SCREEN_DATA_OPS,
   SCREEN_TAGS,
@@ -87,5 +88,12 @@ export {
   formatMoney,
   countSelectedCalendarDays,
   normalizeFilterDate,
+  normalizeMonthlyBoundaryDay,
+  normalizeMonthKey,
+  resolveMonthlyCycleKeyForDate,
+  describeMonthlyCycle,
+  buildMonthlyNetUsdSeries,
+  filterRowsByMonthlyCycleKey,
+  buildMonthlyTagGroupPieDatasetAbsoluteNet,
   matchesFilter
 } from './core/analytics.js';

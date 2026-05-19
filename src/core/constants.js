@@ -2,6 +2,7 @@ export const STORAGE_VERSION = 4;
 export const STORAGE_KEY = 'expense-consolidator-state-v2';
 export const SCREEN_DATA = 'data';
 export const SCREEN_CHARTS = 'charts';
+export const SCREEN_BY_MONTHS = 'by-months';
 export const SCREEN_FX_RATES = 'fx-rates';
 export const SCREEN_DATA_OPS = 'data-ops';
 export const SCREEN_TAGS = 'tags';
@@ -24,6 +25,7 @@ export const CSV_HEADERS = [
 export const supportedScreens = new Set([
   SCREEN_DATA,
   SCREEN_CHARTS,
+  SCREEN_BY_MONTHS,
   SCREEN_FX_RATES,
   SCREEN_DATA_OPS,
   SCREEN_TAGS,

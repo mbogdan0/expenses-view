@@ -7,6 +7,7 @@ export function bindEvents({
   saveState,
   render,
   hydrateFilterInputs,
+  hydrateMonthlyInputs,
   hydrateDisplayCurrencyButtons,
   applyScreen,
   normalizeScreenName,
@@ -60,6 +61,10 @@ export function bindEvents({
   bindSharedDateInput(elements.chartFilterDateFrom, 'dateFrom');
   bindSharedDateInput(elements.chartFilterDateTo, 'dateTo');
 
+  bindMonthlyBoundaryInput(elements.monthlyBoundaryDayInput);
+  bindMonthlyRangeInput(elements.monthlyRangeFrom, 'rangeFrom');
+  bindMonthlyRangeInput(elements.monthlyRangeTo, 'rangeTo');
+
   elements.clearFilters.addEventListener('click', () => {
     app.state.uiPrefs.filters = {
       search: '',
@@ -82,6 +87,16 @@ export function bindEvents({
     render();
   });
 
+  elements.clearMonthlyRangeButton?.addEventListener('click', () => {
+    const monthly = ensureMonthlyPrefs();
+    monthly.rangeFrom = '';
+    monthly.rangeTo = '';
+    monthly.selectedMonthKey = '';
+    hydrateMonthlyInputs();
+    saveState();
+    render();
+  });
+
   elements.toggleExtraColumns?.addEventListener('click', () => {
     app.state.uiPrefs.showExtraColumns = !Boolean(app.state.uiPrefs.showExtraColumns);
     saveState();
@@ -99,6 +114,16 @@ export function bindEvents({
     const parsed = core.parseTagGroupsText(app.state.tagGroupsText);
     app.state.uiPrefs.selectedTagGroup = core.normalizeTagGroupIndex(
       elements.chartTagGroupSelect.value,
+      parsed.groups.length
+    );
+    saveState();
+    render();
+  });
+  elements.monthlyTagGroupSelect?.addEventListener('change', () => {
+    const parsed = core.parseTagGroupsText(app.state.tagGroupsText);
+    const monthly = ensureMonthlyPrefs();
+    monthly.selectedMonthlyTagGroup = core.normalizeTagGroupIndex(
+      elements.monthlyTagGroupSelect.value,
       parsed.groups.length
     );
     saveState();
@@ -177,5 +202,54 @@ export function bindEvents({
       saveState();
       render();
     });
+  }
+
+  function ensureMonthlyPrefs() {
+    if (!app.state.uiPrefs.monthly || typeof app.state.uiPrefs.monthly !== 'object') {
+      app.state.uiPrefs.monthly = {
+        boundaryDay: 21,
+        rangeFrom: '',
+        rangeTo: '',
+        selectedMonthKey: '',
+        selectedMonthlyTagGroup: 0
+      };
+    }
+    return app.state.uiPrefs.monthly;
+  }
+
+  function bindMonthlyBoundaryInput(element) {
+    if (!element) {
+      return;
+    }
+
+    function apply() {
+      const monthly = ensureMonthlyPrefs();
+      monthly.boundaryDay = core.normalizeMonthlyBoundaryDay(element.value);
+      monthly.selectedMonthKey = '';
+      hydrateMonthlyInputs();
+      saveState();
+      render();
+    }
+
+    element.addEventListener('input', apply);
+    element.addEventListener('change', apply);
+  }
+
+  function bindMonthlyRangeInput(element, key) {
+    if (!element) {
+      return;
+    }
+
+    function apply() {
+      const monthly = ensureMonthlyPrefs();
+      monthly[key] = core.normalizeMonthKey(element.value);
+      monthly.selectedMonthKey = '';
+      hydrateMonthlyInputs();
+      saveState();
+      render();
+    }
+
+    element.addEventListener('input', apply);
+    element.addEventListener('change', apply);
   }
 }

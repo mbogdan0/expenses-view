@@ -8,6 +8,21 @@ import { sanitizeText, parseLocalDateTime } from './primitives.js';
 import { computeEffectiveRow } from './rows-and-rates.js';
 import { ensureTagGroupsModel, normalizeTagGroupIndex } from './tag-groups.js';
 
+const MONTH_SHORT_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec'
+];
+
 export function sortRowsByDateDesc(rowRecords) {
   return [...rowRecords].sort((left, right) => {
     const leftDate = left.derived?.effectiveDateEpoch ?? -Infinity;
@@ -279,6 +294,228 @@ export function normalizeFilterDate(value, boundary = 'start') {
       ? new Date(year, month, day, 23, 59, 59, 999)
       : new Date(year, month, day, 0, 0, 0, 0);
   return normalized.getTime();
+}
+
+export function normalizeMonthlyBoundaryDay(value, fallback = 21) {
+  const fallbackValue = Number.isInteger(fallback) ? fallback : 21;
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  const candidate = Number.isInteger(parsed) ? parsed : fallbackValue;
+  return Math.min(31, Math.max(1, candidate));
+}
+
+export function normalizeMonthKey(value) {
+  const input = sanitizeText(value);
+  const match = input.match(/^(\d{4})-(\d{2})$/);
+  if (!match) {
+    return '';
+  }
+
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return '';
+  }
+
+  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}`;
+}
+
+function getDaysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function buildMonthKey(year, monthIndex) {
+  return `${String(year).padStart(4, '0')}-${String(monthIndex + 1).padStart(2, '0')}`;
+}
+
+function parseMonthKey(monthKey) {
+  const normalized = normalizeMonthKey(monthKey);
+  if (!normalized) {
+    return null;
+  }
+
+  const [yearText, monthText] = normalized.split('-');
+  const year = Number.parseInt(yearText, 10);
+  const monthIndex = Number.parseInt(monthText, 10) - 1;
+  return {
+    year,
+    monthIndex
+  };
+}
+
+function createBoundaryDate(year, monthIndex, boundaryDayInput) {
+  const monthStart = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+  const boundaryDay = normalizeMonthlyBoundaryDay(boundaryDayInput);
+  const clampedDay = Math.min(
+    boundaryDay,
+    getDaysInMonth(monthStart.getFullYear(), monthStart.getMonth())
+  );
+  return new Date(monthStart.getFullYear(), monthStart.getMonth(), clampedDay, 0, 0, 0, 0);
+}
+
+function formatDayDate(date) {
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function resolveMonthlyCycleKeyForRow(row, boundaryDay) {
+  if (Number.isFinite(row?.derived?.effectiveDateEpoch)) {
+    return resolveMonthlyCycleKeyForDate(new Date(row.derived.effectiveDateEpoch), boundaryDay);
+  }
+
+  const effective = computeEffectiveRow(row?.source || {}, row?.overrides || {});
+  return resolveMonthlyCycleKeyForDate(effective.date, boundaryDay);
+}
+
+function isMonthKeyInRange(monthKey, rangeFrom, rangeTo) {
+  if (rangeFrom && monthKey < rangeFrom) {
+    return false;
+  }
+  if (rangeTo && monthKey > rangeTo) {
+    return false;
+  }
+  return true;
+}
+
+export function resolveMonthlyCycleKeyForDate(dateValue, boundaryDay = 21) {
+  const parsed = parseLocalDateTime(dateValue);
+  if (!parsed) {
+    return '';
+  }
+
+  const normalizedBoundaryDay = normalizeMonthlyBoundaryDay(boundaryDay);
+  const year = parsed.getFullYear();
+  const monthIndex = parsed.getMonth();
+  const day = parsed.getDate();
+
+  if (normalizedBoundaryDay === 1) {
+    return buildMonthKey(year, monthIndex);
+  }
+
+  const boundaryInMonth = Math.min(normalizedBoundaryDay, getDaysInMonth(year, monthIndex));
+  if (day >= boundaryInMonth) {
+    const nextMonth = new Date(year, monthIndex + 1, 1, 0, 0, 0, 0);
+    return buildMonthKey(nextMonth.getFullYear(), nextMonth.getMonth());
+  }
+
+  return buildMonthKey(year, monthIndex);
+}
+
+export function describeMonthlyCycle(monthKey, boundaryDay = 21) {
+  const parsed = parseMonthKey(monthKey);
+  if (!parsed) {
+    return null;
+  }
+
+  const normalizedBoundaryDay = normalizeMonthlyBoundaryDay(boundaryDay);
+  const cycleBoundaryDate = createBoundaryDate(parsed.year, parsed.monthIndex, normalizedBoundaryDay);
+
+  let startDate;
+  let endDate;
+  if (normalizedBoundaryDay === 1) {
+    startDate = new Date(cycleBoundaryDate.getFullYear(), cycleBoundaryDate.getMonth(), 1, 0, 0, 0, 0);
+    endDate = new Date(cycleBoundaryDate.getFullYear(), cycleBoundaryDate.getMonth() + 1, 0, 0, 0, 0, 0);
+  } else {
+    startDate = createBoundaryDate(parsed.year, parsed.monthIndex - 1, normalizedBoundaryDay);
+    endDate = new Date(
+      cycleBoundaryDate.getFullYear(),
+      cycleBoundaryDate.getMonth(),
+      cycleBoundaryDate.getDate() - 1,
+      0,
+      0,
+      0,
+      0
+    );
+  }
+
+  const label = `${MONTH_SHORT_LABELS[endDate.getMonth()]} ${endDate.getFullYear()}`;
+  return {
+    monthKey: buildMonthKey(parsed.year, parsed.monthIndex),
+    label,
+    rangeLabel: `${formatDayDate(startDate)} - ${formatDayDate(endDate)}`,
+    startDate,
+    endDate,
+    startDayEpoch: startDate.getTime(),
+    endDayEpoch: endDate.getTime()
+  };
+}
+
+export function buildMonthlyNetUsdSeries(rows, boundaryDay = 21, rangeFrom = '', rangeTo = '') {
+  const normalizedBoundaryDay = normalizeMonthlyBoundaryDay(boundaryDay);
+  const normalizedRangeFrom = normalizeMonthKey(rangeFrom);
+  const normalizedRangeTo = normalizeMonthKey(rangeTo);
+  const totalsByMonth = new Map();
+
+  for (const row of rows) {
+    const monthKey = resolveMonthlyCycleKeyForRow(row, normalizedBoundaryDay);
+    if (!monthKey || !isMonthKeyInRange(monthKey, normalizedRangeFrom, normalizedRangeTo)) {
+      continue;
+    }
+
+    if (!totalsByMonth.has(monthKey)) {
+      totalsByMonth.set(monthKey, {
+        monthKey,
+        signedNet: 0,
+        absoluteNet: 0,
+        rowCount: 0,
+        resolvedRows: 0,
+        unresolvedRows: 0
+      });
+    }
+
+    const bucket = totalsByMonth.get(monthKey);
+    bucket.rowCount += 1;
+
+    const conversion = getRowConversionForDisplayCurrency(row, DISPLAY_CURRENCY_USD);
+    if (conversion.unresolved || conversion.amount === null || conversion.amount === undefined) {
+      bucket.unresolvedRows += 1;
+      continue;
+    }
+
+    bucket.resolvedRows += 1;
+    bucket.signedNet += conversion.amount;
+  }
+
+  return Array.from(totalsByMonth.values())
+    .map((item) => {
+      const cycle = describeMonthlyCycle(item.monthKey, normalizedBoundaryDay);
+      item.absoluteNet = Math.abs(item.signedNet);
+      return {
+        ...item,
+        label: cycle?.label || item.monthKey,
+        rangeLabel: cycle?.rangeLabel || '—'
+      };
+    })
+    .sort((left, right) => right.monthKey.localeCompare(left.monthKey));
+}
+
+export function filterRowsByMonthlyCycleKey(rows, boundaryDay = 21, monthKey = '') {
+  const normalizedBoundaryDay = normalizeMonthlyBoundaryDay(boundaryDay);
+  const normalizedMonthKey = normalizeMonthKey(monthKey);
+  if (!normalizedMonthKey) {
+    return [];
+  }
+
+  return rows.filter(
+    (row) => resolveMonthlyCycleKeyForRow(row, normalizedBoundaryDay) === normalizedMonthKey
+  );
+}
+
+export function buildMonthlyTagGroupPieDatasetAbsoluteNet(
+  rows,
+  tagGroupsInput,
+  selectedGroupIndex = 0,
+  monthKey = '',
+  boundaryDay = 21
+) {
+  const cycleRows = filterRowsByMonthlyCycleKey(rows, boundaryDay, monthKey);
+  return buildTagGroupPieDatasetAbsoluteNet(
+    cycleRows,
+    tagGroupsInput,
+    selectedGroupIndex,
+    DISPLAY_CURRENCY_USD
+  );
 }
 
 export function matchesFilter(record, filters) {

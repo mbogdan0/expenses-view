@@ -15,6 +15,7 @@
       <nav class="screen-nav" aria-label="Main navigation">
         <button class="screen-tab active" type="button" data-screen="data">📋 Data</button>
         <button class="screen-tab" type="button" data-screen="charts">📊 Charts</button>
+        <button class="screen-tab" type="button" data-screen="by-months">🗓️ By months</button>
         <button class="screen-tab" type="button" data-screen="fx-rates">💱 Rates</button>
         <button class="screen-tab" type="button" data-screen="tags">🏷️ Tags</button>
         <button class="screen-tab" type="button" data-screen="category-merge">🧩 Category Merge</button>
@@ -175,6 +176,70 @@
           </div>
           <div class="chart-canvas-wrap">
             <canvas id="tagChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section id="byMonthsScreen" class="screen" aria-label="By months screen">
+        <div class="panel monthly-filters-panel">
+          <h2>By Months Settings</h2>
+          <div class="monthly-filters-grid">
+            <label>
+              Boundary day (1-31)
+              <input id="monthlyBoundaryDayInput" type="number" min="1" max="31" step="1" />
+            </label>
+            <label>
+              Month range from
+              <input id="monthlyRangeFrom" type="month" />
+            </label>
+            <label>
+              Month range to
+              <input id="monthlyRangeTo" type="month" />
+            </label>
+            <button id="clearMonthlyRangeButton" type="button" class="btn btn-light">Clear month range</button>
+          </div>
+        </div>
+
+        <div class="cards-grid monthly-cards-grid">
+          <article class="summary-card">
+            <h3>Selected month</h3>
+            <p id="monthlySelectedMonthLabel" class="metric">—</p>
+            <p id="monthlySelectedRangeLabel" class="metric-subtle">Range: —</p>
+          </article>
+          <article class="summary-card">
+            <h3>Net USD</h3>
+            <p id="monthlySelectedNet" class="metric">0.00</p>
+            <p id="monthlySelectedUnresolved" class="metric-subtle">Unresolved rows: 0</p>
+          </article>
+          <article class="summary-card">
+            <h3>Visible months</h3>
+            <p id="monthlyVisibleMonths" class="metric">0</p>
+            <p id="monthlyVisibleRows" class="metric-subtle">Rows in visible range: 0</p>
+          </article>
+        </div>
+
+        <div class="panel chart-panel">
+          <div class="chart-title-row">
+            <h2>Monthly net (USD)</h2>
+          </div>
+          <div class="chart-canvas-wrap monthly-bar-chart-wrap">
+            <canvas id="monthlyTotalsChart"></canvas>
+          </div>
+        </div>
+
+        <div class="panel chart-panel">
+          <div class="chart-title-row">
+            <h2 id="monthlyTagChartTitle">Share by tag (USD)</h2>
+            <div class="chart-actions">
+              <select id="monthlyTagGroupSelect" class="chart-group-select" aria-label="Tag group for monthly share chart">
+                <option value="0">No groups defined</option>
+              </select>
+              <p id="monthlyTagChartNet" class="chart-net">Net USD: 0.00</p>
+              <button id="monthlyTagLegendToggle" type="button" class="btn btn-light chart-legend-toggle">Hide all</button>
+            </div>
+          </div>
+          <div class="chart-canvas-wrap">
+            <canvas id="monthlyTagChart"></canvas>
           </div>
         </div>
       </section>

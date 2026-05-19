@@ -2,10 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DISPLAY_CURRENCY_USD,
+  SCREEN_BY_MONTHS,
   TAG_GROUP_INVALID_LABEL,
   TAG_GROUP_NO_TAG_LABEL,
   applyBulkTagMutation,
   buildCategoryPieDatasetAbsoluteNet,
+  buildMonthlyNetUsdSeries,
+  buildMonthlyTagGroupPieDatasetAbsoluteNet,
   buildCategoryPieDatasetUAHAbsoluteNet,
   buildDedupId,
   buildPiePalette,
@@ -16,9 +19,13 @@ import {
   countSelectedCalendarDays,
   computeEffectiveRow,
   createEmptyState,
+  describeMonthlyCycle,
+  filterRowsByMonthlyCycleKey,
   getRowConversionForDisplayCurrency,
   matchesFilter,
   normalizeDisplayCurrency,
+  normalizeMonthKey,
+  normalizeMonthlyBoundaryDay,
   normalizeTagGroupIndex,
   normalizeImportedRow,
   normalizeTags,
@@ -28,6 +35,7 @@ import {
   parseTagGroupsText,
   parseStateSnapshotJson,
   recomputeDerivedRows,
+  resolveMonthlyCycleKeyForDate,
   resolveRate,
   resolveUsdRate,
   sanitizeLoadedState,
@@ -57,6 +65,34 @@ function dayOffsetString(offsetDays) {
 
 function dayOffsetDateTime(offsetDays) {
   return `${dayOffsetString(offsetDays)} 12:00`;
+}
+
+function createMonthlyRow({ id, date, usdAmount, usdUnresolved = false, tags = [] }) {
+  return {
+    id,
+    source: {
+      id,
+      date: `${date} 12:00`,
+      category: 'Original',
+      sourceFullCategory: 'File / Original',
+      price: '-10',
+      currency: 'UAH',
+      rate: '',
+      rateType: '',
+      notes: '',
+      image: '',
+      tags: []
+    },
+    overrides: {
+      tags
+    },
+    derived: {
+      effectiveDateEpoch: new Date(`${date}T12:00:00`).getTime(),
+      usdUnresolved,
+      usdAmount: usdUnresolved ? null : usdAmount,
+      usdConversionStatus: usdUnresolved ? 'missing_manual_rate' : 'resolved'
+    }
+  };
 }
 
 test('buildSourceFullCategory combines filename and category', () => {
@@ -114,6 +150,106 @@ test('countSelectedCalendarDays returns inclusive range in calendar days', () =>
   assert.equal(countSelectedCalendarDays('2026-04-01T10:00', '2026-04-03T09:00'), 3);
   assert.equal(countSelectedCalendarDays('', '2026-04-03T09:00'), null);
   assert.equal(countSelectedCalendarDays('2026-04-05T00:00', '2026-04-03T09:00'), 0);
+});
+
+test('normalizeMonthlyBoundaryDay clamps values into 1..31 with default fallback', () => {
+  assert.equal(normalizeMonthlyBoundaryDay(undefined), 21);
+  assert.equal(normalizeMonthlyBoundaryDay('0'), 1);
+  assert.equal(normalizeMonthlyBoundaryDay('32'), 31);
+  assert.equal(normalizeMonthlyBoundaryDay('19'), 19);
+  assert.equal(normalizeMonthlyBoundaryDay('invalid', 11), 11);
+});
+
+test('normalizeMonthKey accepts strict YYYY-MM and rejects invalid values', () => {
+  assert.equal(normalizeMonthKey('2026-04'), '2026-04');
+  assert.equal(normalizeMonthKey('2026-13'), '');
+  assert.equal(normalizeMonthKey('2026-4'), '');
+  assert.equal(normalizeMonthKey(''), '');
+});
+
+test('resolveMonthlyCycleKeyForDate maps date to 21->20 cycle end month', () => {
+  assert.equal(resolveMonthlyCycleKeyForDate('2026-03-20 09:00', 21), '2026-03');
+  assert.equal(resolveMonthlyCycleKeyForDate('2026-03-21 09:00', 21), '2026-04');
+  assert.equal(resolveMonthlyCycleKeyForDate('2026-04-20 23:00', 21), '2026-04');
+});
+
+test('resolveMonthlyCycleKeyForDate clamps short months for high boundary days', () => {
+  assert.equal(resolveMonthlyCycleKeyForDate('2026-02-27 09:00', 31), '2026-02');
+  assert.equal(resolveMonthlyCycleKeyForDate('2026-02-28 09:00', 31), '2026-03');
+});
+
+test('describeMonthlyCycle returns label and range text anchored to cycle end month', () => {
+  const cycle = describeMonthlyCycle('2026-04', 21);
+  assert.equal(cycle?.label, 'Apr 2026');
+  assert.equal(cycle?.rangeLabel, '2026-03-21 - 2026-04-20');
+
+  const cycleWithClamp = describeMonthlyCycle('2026-03', 31);
+  assert.equal(cycleWithClamp?.label, 'Mar 2026');
+  assert.equal(cycleWithClamp?.rangeLabel, '2026-02-28 - 2026-03-30');
+});
+
+test('buildMonthlyNetUsdSeries aggregates by month and keeps range independent', () => {
+  const rows = [
+    createMonthlyRow({ id: 'r1', date: '2026-03-21', usdAmount: -10, tags: ['P0'] }),
+    createMonthlyRow({ id: 'r2', date: '2026-04-20', usdAmount: -30, tags: ['P0'] }),
+    createMonthlyRow({ id: 'r3', date: '2026-04-22', usdAmount: 15, tags: ['P1'] }),
+    createMonthlyRow({ id: 'r4', date: '2026-04-25', usdAmount: 1, usdUnresolved: true, tags: ['P1'] })
+  ];
+
+  const allSeries = buildMonthlyNetUsdSeries(rows, 21);
+  assert.deepEqual(
+    allSeries.map((item) => ({
+      monthKey: item.monthKey,
+      signedNet: item.signedNet,
+      rowCount: item.rowCount,
+      unresolvedRows: item.unresolvedRows
+    })),
+    [
+      { monthKey: '2026-05', signedNet: 15, rowCount: 2, unresolvedRows: 1 },
+      { monthKey: '2026-04', signedNet: -40, rowCount: 2, unresolvedRows: 0 }
+    ]
+  );
+
+  const filteredSeries = buildMonthlyNetUsdSeries(rows, 21, '2026-04', '2026-04');
+  assert.equal(filteredSeries.length, 1);
+  assert.equal(filteredSeries[0].monthKey, '2026-04');
+  assert.equal(filteredSeries[0].signedNet, -40);
+});
+
+test('filterRowsByMonthlyCycleKey returns rows only from selected cycle', () => {
+  const rows = [
+    createMonthlyRow({ id: 'r1', date: '2026-03-21', usdAmount: -10, tags: ['P0'] }),
+    createMonthlyRow({ id: 'r2', date: '2026-04-20', usdAmount: -30, tags: ['P1'] }),
+    createMonthlyRow({ id: 'r3', date: '2026-04-22', usdAmount: 15, tags: ['P0'] })
+  ];
+
+  const aprilCycleRows = filterRowsByMonthlyCycleKey(rows, 21, '2026-04');
+  assert.deepEqual(
+    aprilCycleRows.map((row) => row.id).sort(),
+    ['r1', 'r2']
+  );
+});
+
+test('buildMonthlyTagGroupPieDatasetAbsoluteNet uses USD rows inside selected cycle', () => {
+  const rows = [
+    createMonthlyRow({ id: 'r1', date: '2026-03-21', usdAmount: -10, tags: ['P0'] }),
+    createMonthlyRow({ id: 'r2', date: '2026-04-20', usdAmount: -30, tags: ['P1'] }),
+    createMonthlyRow({ id: 'r3', date: '2026-04-22', usdAmount: 15, tags: ['P0'] }),
+    createMonthlyRow({ id: 'r4', date: '2026-04-25', usdAmount: 6, usdUnresolved: true, tags: ['P1'] })
+  ];
+
+  const dataset = buildMonthlyTagGroupPieDatasetAbsoluteNet(
+    rows,
+    'Priorities: P0, P1',
+    0,
+    '2026-04',
+    21
+  );
+
+  assert.deepEqual(dataset, [
+    { label: 'P1', signedNet: -30, absoluteNet: 30 },
+    { label: 'P0', signedNet: -10, absoluteNet: 10 }
+  ]);
 });
 
 test('resolveRate uses nearest same-currency row when explicit rate is missing', () => {
@@ -1101,15 +1237,60 @@ test('sanitizeLoadedState defaults displayCurrency and manualUsdRatesText when m
   assert.equal(sanitized.uiPrefs.displayCurrency, 'UAH');
 });
 
+test('sanitizeLoadedState adds and normalizes monthly preferences when missing or invalid', () => {
+  const state = createEmptyState();
+  delete state.uiPrefs.monthly;
+
+  const sanitized = sanitizeLoadedState(state);
+  assert.deepEqual(sanitized.uiPrefs.monthly, {
+    boundaryDay: 21,
+    rangeFrom: '',
+    rangeTo: '',
+    selectedMonthKey: '',
+    selectedMonthlyTagGroup: 0
+  });
+
+  const sanitizedInvalid = sanitizeLoadedState({
+    ...state,
+    uiPrefs: {
+      ...state.uiPrefs,
+      monthly: {
+        boundaryDay: 88,
+        rangeFrom: '2026-4',
+        rangeTo: '2026-13',
+        selectedMonthKey: 'bad',
+        selectedMonthlyTagGroup: -3
+      }
+    }
+  });
+
+  assert.deepEqual(sanitizedInvalid.uiPrefs.monthly, {
+    boundaryDay: 31,
+    rangeFrom: '',
+    rangeTo: '',
+    selectedMonthKey: '',
+    selectedMonthlyTagGroup: 0
+  });
+});
+
 test('parseStateSnapshotJson accepts valid current snapshot', () => {
   const snapshot = createEmptyState();
-  snapshot.uiPrefs.activeScreen = 'data-ops';
+  snapshot.uiPrefs.activeScreen = SCREEN_BY_MONTHS;
+  snapshot.uiPrefs.monthly = {
+    boundaryDay: 21,
+    rangeFrom: '2026-02',
+    rangeTo: '2026-06',
+    selectedMonthKey: '2026-04',
+    selectedMonthlyTagGroup: 0
+  };
   snapshot.updatedAt = '2026-04-22T09:00:00.000Z';
 
   const parsed = parseStateSnapshotJson(JSON.stringify(snapshot));
   assert.equal(parsed.ok, true);
   assert.equal(parsed.state.version, STORAGE_VERSION);
-  assert.equal(parsed.state.uiPrefs.activeScreen, 'data-ops');
+  assert.equal(parsed.state.uiPrefs.activeScreen, SCREEN_BY_MONTHS);
+  assert.equal(parsed.state.uiPrefs.monthly.boundaryDay, 21);
+  assert.equal(parsed.state.uiPrefs.monthly.selectedMonthKey, '2026-04');
 });
 
 test('parseStateSnapshotJson accepts snapshot without categoryMergeRulesText', () => {
@@ -1161,4 +1342,16 @@ test('parseStateSnapshotJson rejects invalid displayCurrency', () => {
   const parsed = parseStateSnapshotJson(JSON.stringify(snapshot));
   assert.equal(parsed.ok, false);
   assert.match(parsed.error, /uiPrefs\.displayCurrency/);
+});
+
+test('parseStateSnapshotJson rejects invalid monthly boundary type when provided', () => {
+  const snapshot = createEmptyState();
+  snapshot.uiPrefs.monthly = {
+    ...snapshot.uiPrefs.monthly,
+    boundaryDay: '21'
+  };
+
+  const parsed = parseStateSnapshotJson(JSON.stringify(snapshot));
+  assert.equal(parsed.ok, false);
+  assert.match(parsed.error, /uiPrefs\.monthly\.boundaryDay/);
 });
